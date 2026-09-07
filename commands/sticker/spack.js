@@ -1,20 +1,88 @@
 import axios from "axios";
 import sharp from "sharp";
+import { crc32 } from "zlib";
+import {
+  MEDIA_PATH_MAP,
+  MEDIA_HKDF_KEY_MAPPING,
+  encryptedStream,
+  generateWAMessageFromContent,
+  generateMessageIDV2,
+  unixTimestampSeconds,
+  sha256,
+  proto
+} from "@whiskeysockets/baileys";
 import { fytBold } from "../../models/TextStyle.js";
+
+// Configuración de endpoints MMS nativos de WhatsApp
+MEDIA_PATH_MAP["sticker-pack"] = "/mms/document";
+MEDIA_HKDF_KEY_MAPPING["sticker-pack"] = "Sticker Pack";
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const toBuffer = async (url) =>
   Buffer.from((await axios.get(url, { responseType: "arraybuffer" })).data);
 
-const toWebp = async (buffer, isAnimated = false) => {
-  const base = sharp(buffer, isAnimated ? { animated: true } : {})
-    .resize(512, 512, {
-      fit: "contain",
-      background: { r: 0, g: 0, b: 0, alpha: 0 },
-    })
-    .webp({ quality: 80, ...(isAnimated ? { loop: 0 } : {}) });
-  return base.toBuffer();
+const isWebp = (b) =>
+  b.length >= 12 &&
+  b.toString("ascii", 0, 4) === "RIFF" &&
+  b.toString("ascii", 8, 12) === "WEBP";
+
+const isAnimatedWebp = (b) => {
+  if (!isWebp(b)) return false;
+  let o = 12;
+  while (o < b.length - 8) {
+    const tag = b.toString("ascii", o, o + 4);
+    const sz = b.readUInt32LE(o + 4);
+    if (tag === "VP8X" && b[o + 8] & 0x02) return true;
+    if (tag === "ANIM" || tag === "ANMF") return true;
+    o += 8 + sz + (sz % 2);
+  }
+  return false;
+};
+
+const toWebp = async (buffer, animated = false) =>
+  sharp(buffer, animated ? { animated: true } : {})
+    .resize(512, 512, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .webp({ quality: 80, ...(animated ? { loop: 0 } : {}) })
+    .toBuffer();
+
+const makeZip = (files) => {
+  const locals = [];
+  const centrals = [];
+  let offset = 0;
+  for (const [name, data] of Object.entries(files)) {
+    const n = Buffer.from(name, "utf8");
+    const crc = crc32(data);
+    const local = Buffer.alloc(30 + n.length);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt32LE(crc, 14);
+    local.writeUInt32LE(data.length, 18);
+    local.writeUInt32LE(data.length, 22);
+    local.writeUInt16LE(n.length, 26);
+    n.copy(local, 30);
+    locals.push(local, data);
+    const central = Buffer.alloc(46 + n.length);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(20, 4);
+    central.writeUInt16LE(20, 6);
+    central.writeUInt32LE(crc, 16);
+    central.writeUInt32LE(data.length, 20);
+    central.writeUInt32LE(data.length, 24);
+    central.writeUInt16LE(n.length, 28);
+    central.writeUInt32LE(offset, 42);
+    n.copy(central, 46);
+    centrals.push(central);
+    offset += local.length + data.length;
+  }
+  const cd = Buffer.concat(centrals);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(centrals.length, 8);
+  end.writeUInt16LE(centrals.length, 10);
+  end.writeUInt32LE(cd.length, 12);
+  end.writeUInt32LE(offset, 16);
+  return Buffer.concat([...locals, cd, end]);
 };
 
 const withRetry = async (fn, attempt = 1) => {
@@ -31,25 +99,75 @@ const withRetry = async (fn, attempt = 1) => {
 
 const searchStickerly = (query) =>
   withRetry(async () => {
-    const { data } = await axios.get(
-      "https://api.alyacore.xyz/stickerly/search",
-      {
-        params: { query, key: "oboe" },
-      },
-    );
+    const { data } = await axios.get("https://api.alyacore.xyz/stickerly/search", {
+      params: { query, key: "oboe" }
+    });
     return data;
   });
 
 const getPackDetail = (url) =>
   withRetry(async () => {
-    const { data } = await axios.get(
-      "https://api.alyacore.xyz/stickerly/detail",
-      {
-        params: { url, key: "oboe" },
-      },
-    );
+    const { data } = await axios.get("https://api.alyacore.xyz/stickerly/detail", {
+      params: { url, key: "oboe" }
+    });
     return data;
   });
+
+const sendStickerPack = async (socket, remoteJid, { name, publisher, description, stickers, cover, quoted }) => {
+  if (!stickers.length) throw new Error("Pack vacío");
+  if (stickers.length > 60) throw new Error("Máximo 60 stickers por pack");
+
+  const packId = generateMessageIDV2();
+  const files = {};
+
+  const meta = stickers.map((s) => {
+    if (s.sticker.length > 1024 * 1024) throw new Error("Un sticker supera 1MB");
+    const fileName = sha256(s.sticker).toString("base64").replace(/\//g, "-") + ".webp";
+    files[fileName] = s.sticker;
+    return {
+      fileName,
+      mimetype: "image/webp",
+      isAnimated: !!s.isAnimated,
+      emojis: s.emojis?.length ? s.emojis : ["🎭"],
+      accessibilityLabel: ""
+    };
+  });
+
+  const trayIconFileName = `${packId}.webp`;
+  files[trayIconFileName] = cover;
+
+  const zipBuffer = makeZip(files);
+
+  const up = await encryptedStream(zipBuffer, "sticker-pack", { logger: socket.logger });
+  const { directPath } = await socket.waUploadToServer(up.encFilePath, {
+    fileEncSha256B64: up.fileEncSha256.toString("base64"),
+    mediaType: "sticker-pack"
+  });
+
+  const content = {
+    stickerPackMessage: {
+      name,
+      publisher,
+      packDescription: description,
+      stickerPackId: packId,
+      stickerPackOrigin: proto.Message.StickerPackMessage.StickerPackOrigin.THIRD_PARTY,
+      stickerPackSize: zipBuffer.length,
+      stickers: meta,
+      fileSha256: up.fileSha256,
+      fileEncSha256: up.fileEncSha256,
+      mediaKey: up.mediaKey,
+      directPath,
+      fileLength: up.fileLength,
+      mediaKeyTimestamp: unixTimestampSeconds(),
+      trayIconFileName
+    }
+  };
+
+  const userJid = socket.user?.id || socket.user?.jid;
+  const m = generateWAMessageFromContent(remoteJid, content, { quoted, userJid });
+  await socket.relayMessage(remoteJid, m.message, { messageId: m.key.id });
+  return m;
+};
 
 export default {
   name: ["stickersearch", "buscars", "spack"],
@@ -62,7 +180,7 @@ export default {
 
     if (!query) {
       await socket.sendMessage(remoteJid, {
-        react: { text: "❌", key: message.key },
+        react: { text: "❌", key: message.key }
       });
       let text = `╭〔 ❌ ${fytBold("AURA REED")} 〕⬣\n`;
       text += `┃ ${fytBold("SINTAXIS INCORRECTA")}\n`;
@@ -75,7 +193,7 @@ export default {
     }
 
     await socket.sendMessage(remoteJid, {
-      react: { text: "⏳", key: message.key },
+      react: { text: "⏳", key: message.key }
     });
 
     try {
@@ -85,7 +203,7 @@ export default {
 
       if (!freePacks.length) {
         await socket.sendMessage(remoteJid, {
-          react: { text: "❌", key: message.key },
+          react: { text: "❌", key: message.key }
         });
         let text = `╭〔 ❌ ${fytBold("AURA REED")} 〕⬣\n`;
         text += `┃ ⚠️ ${fytBold("SIN RESULTADOS")}\n`;
@@ -93,11 +211,7 @@ export default {
         text += `┃ > No se encontraron packs para: "${query}".\n\n`;
         text += `╰〔 ⚡${fytBold("SYSTEM ALERT")} 〕⬣`;
 
-        return await socket.sendMessage(
-          remoteJid,
-          { text },
-          { quoted: message },
-        );
+        return await socket.sendMessage(remoteJid, { text }, { quoted: message });
       }
 
       const senderNum =
@@ -105,15 +219,15 @@ export default {
         message.key.remoteJid.replace(/@s.whatsapp.net|@g.us/, "");
       const user = db?.users?.[senderNum] || {};
 
-      const pushName = message.pushName || user.name || "Usuario";
-      const authorName = user.text2 || global.author || pushName;
+      const packName = user.text1 || global.packname || "Aura Reed";
+      const authorName = user.text2 || global.author || `@${senderNum}`;
 
       const bestPack = freePacks[0];
       const detail = await getPackDetail(bestPack.url);
 
       if (!detail.status || !detail.detalles?.stickers?.length) {
         await socket.sendMessage(remoteJid, {
-          react: { text: "❌", key: message.key },
+          react: { text: "❌", key: message.key }
         });
         let text = `╭〔 ❌ ${fytBold("AURA REED")} 〕⬣\n`;
         text += `┃ ⚠️ ${fytBold("ERROR DE LECTURA")}\n`;
@@ -121,62 +235,38 @@ export default {
         text += `┃ > No se pudo obtener el contenido del paquete.\n\n`;
         text += `╰〔 ⚡${fytBold("SYSTEM ALERT")} 〕⬣`;
 
-        return await socket.sendMessage(
-          remoteJid,
-          { text },
-          { quoted: message },
-        );
+        return await socket.sendMessage(remoteJid, { text }, { quoted: message });
       }
 
       const { detalles } = detail;
-      const stickers = detalles.stickers.slice(0, 30);
+      const rawStickers = detalles.stickers.slice(0, 30);
 
       let infoText = `╭〔 📦 ${fytBold("AURA REED")} 〕⬣\n`;
       infoText += `┃ 🏷️ ${fytBold("PROCESANDO PACK")}\n`;
       infoText += `╰━━━━━━━━━━━━⬣\n\n`;
       infoText += `┃ 📌 Pack: ${detalles.name}\n`;
-      infoText += `┃ 🖼️ Stickers: ${stickers.length}\n`;
+      infoText += `┃ 🖼️ Stickers: ${rawStickers.length}\n`;
       infoText += `┃ ⏳ Obteniendo Paquete...\n\n`;
       infoText += `╰〔 ⚡${fytBold("SYSTEM INFO")} 〕⬣`;
 
-      await socket.sendMessage(
-        remoteJid,
-        { text: infoText },
-        { quoted: message },
-      );
+      await socket.sendMessage(remoteJid, { text: infoText }, { quoted: message });
 
-      const stickerList = [];
-      for (const s of stickers) {
-        try {
-          const buf = await toBuffer(s.imageUrl);
-          const webp = await toWebp(buf, s.isAnimated);
+      const stickers = (
+        await Promise.allSettled(
+          rawStickers.map(async (s) => {
+            const buf = await toBuffer(s.imageUrl);
+            const animated = s.isAnimated || isAnimatedWebp(buf);
+            const webp = isWebp(buf) ? buf : await toWebp(buf, animated);
+            return { sticker: webp, isAnimated: animated, emojis: ["🎭"] };
+          })
+        )
+      )
+        .filter((r) => r.status === "fulfilled")
+        .map((r) => r.value);
 
-          // Baileys espera que 'url' o 'buffer' (como stream/Buffer) se pasen correctamente según la versión interna,
-          // probemos pasando el Buffer directamente en la propiedad 'url' o usando un objeto compatible con generateWAMessageMedia.
-          stickerList.push({
-            url: s.imageUrl, // Algunas versiones de Baileys leen directamente la URL o el buffer procesado en 'data'
-            // O pasarlo como buffer directo si la versión lo acepta:
-            // data: webp
-          });
-        } catch (err) {
-          console.warn(`Saltando sticker fallido: ${s.imageUrl}`);
-        }
-      }
-
-      // Enfoque alternativo mandando un array de buffers con type sticker si el stickerPack da problemas,
-      // O estructurarlo exactamente como Baileys lo procesa en prepareWAMessageMedia:
-      const formattedStickers = [];
-      for (const s of stickers) {
-        try {
-          const buf = await toBuffer(s.imageUrl);
-          const webp = await toWebp(buf, s.isAnimated);
-          formattedStickers.push(webp); // Enviar directamente los buffers webp si Baileys lo soporta así
-        } catch (e) {}
-      }
-
-      if (!formattedStickers.length) {
+      if (!stickers.length) {
         await socket.sendMessage(remoteJid, {
-          react: { text: "❌", key: message.key },
+          react: { text: "❌", key: message.key }
         });
         let text = `╭〔 ❌ ${fytBold("AURA REED")} 〕⬣\n`;
         text += `┃ ⚠️ ${fytBold("ERROR DE PROCESAMIENTO")}\n`;
@@ -184,11 +274,7 @@ export default {
         text += `┃ > No se pudo convertir ningún sticker del paquete.\n\n`;
         text += `╰〔 ⚡${fytBold("SYSTEM ALERT")} 〕⬣`;
 
-        return await socket.sendMessage(
-          remoteJid,
-          { text },
-          { quoted: message },
-        );
+        return await socket.sendMessage(remoteJid, { text }, { quoted: message });
       }
 
       const cover = await sharp(await toBuffer(detalles.thumbnailUrl))
@@ -196,23 +282,22 @@ export default {
         .webp({ quality: 80 })
         .toBuffer();
 
-      // Mandar individualmente o usar el formato plano que acepta Baileys en prepareWAMessageMedia
-      for (const stkBuf of formattedStickers) {
-        await socket.sendMessage(
-          remoteJid,
-          { sticker: stkBuf },
-          { quoted: message },
-        );
-        await delay(500); // Pequeño delay para evitar flood
-      }
+      await sendStickerPack(socket, remoteJid, {
+        name: packName,
+        publisher: authorName,
+        description: `${detalles.name} • Aura Reed Bot`,
+        stickers,
+        cover,
+        quoted: message
+      });
 
       await socket.sendMessage(remoteJid, {
-        react: { text: "✅", key: message.key },
+        react: { text: "✅", key: message.key }
       });
     } catch (error) {
       console.error(error);
       await socket.sendMessage(remoteJid, {
-        react: { text: "❌", key: message.key },
+        react: { text: "❌", key: message.key }
       });
 
       let text = `╭〔 ❌ ${fytBold("AURA REED")} 〕⬣\n`;
@@ -223,5 +308,5 @@ export default {
 
       await socket.sendMessage(remoteJid, { text }, { quoted: message });
     }
-  },
+  }
 };
