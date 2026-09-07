@@ -218,6 +218,7 @@ export default {
         message.key.participant ||
         message.key.remoteJid.replace(/@s.whatsapp.net|@g.us/, "");
       const user = db?.users?.[senderNum] || {};
+      const pushName = message.pushName || "Usuario";
 
       const packName = user.text1 || global.packname || "Aura Reed";
       const authorName = user.text2 || global.author || `@${pushName}`;
