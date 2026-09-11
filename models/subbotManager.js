@@ -86,6 +86,9 @@ if (!fs.existsSync(sessionsDir)) {
 
 const activeSubBots = new Map();
 const subBotReconnectTimers = new Map();
+const subBotReconnectAttempts = new Map();
+
+const MAX_SUBBOT_RECONNECT_ATTEMPTS = 2;
 
 function clearSubBotReconnectTimer(senderId) {
   const timer = subBotReconnectTimers.get(senderId);
@@ -93,6 +96,17 @@ function clearSubBotReconnectTimer(senderId) {
     clearTimeout(timer);
     subBotReconnectTimers.delete(senderId);
   }
+}
+
+function resetSubBotReconnectAttempts(senderId) {
+  subBotReconnectAttempts.set(senderId, 0);
+}
+
+function registerSubBotReconnectAttempt(senderId) {
+  const current = subBotReconnectAttempts.get(senderId) || 0;
+  const next = current + 1;
+  subBotReconnectAttempts.set(senderId, next);
+  return next;
 }
 
 function scheduleSubBotReconnect(senderId, fn) {
@@ -250,7 +264,7 @@ export function syncSubBotsJson(mainBotNumber = null) {
         if (parsed && typeof parsed === "object") {
           currentData = parsed;
         }
-      } catch { }
+      } catch {}
     }
 
     const registry = {};
@@ -393,30 +407,30 @@ async function destroySubBotSocket(senderId, subSock) {
 
   try {
     subSock.ev.removeAllListeners();
-  } catch { }
+  } catch {}
 
   try {
     subSock.ws?.removeAllListeners?.();
-  } catch { }
+  } catch {}
 
   try {
     subSock.ws?.close();
-  } catch { }
+  } catch {}
 
   try {
     activeSubBots.delete(senderId);
-  } catch { }
+  } catch {}
 
   // Persistir inmediatamente que el Sub-Bot quedó inactivo.
   try {
     syncSubBotsJson();
-  } catch { }
+  } catch {}
 
   // Muy importante:
   // libera DB y cache del sub-bot.
   try {
     closeSubBotDB(senderId);
-  } catch { }
+  } catch {}
 }
 
 // ============================================================
@@ -437,8 +451,8 @@ export async function stopSubBot(senderId) {
       try {
         subSock.isClosedManually = true;
 
-        await subSock.logout().catch(() => { });
-      } catch { }
+        await subSock.logout().catch(() => {});
+      } catch {}
 
       await destroySubBotSocket(senderId, subSock);
 
@@ -449,7 +463,7 @@ export async function stopSubBot(senderId) {
   } else {
     try {
       closeSubBotDB(senderId);
-    } catch { }
+    } catch {}
   }
 
   if (fs.existsSync(sessionPath)) {
@@ -517,10 +531,10 @@ export async function createSubBot(
   const sender = isAutoload
     ? null
     : m?.key?.participantPn ||
-    m?.key?.participantAlt ||
-    m?.key?.participant ||
-    m?.key?.remoteJidAlt ||
-    m?.key?.remoteJid;
+      m?.key?.participantAlt ||
+      m?.key?.participant ||
+      m?.key?.remoteJidAlt ||
+      m?.key?.remoteJid;
 
   const senderId =
     autoSenderId ||
@@ -586,7 +600,7 @@ export async function createSubBot(
       } else {
         try {
           closeSubBotDB(senderId);
-        } catch { }
+        } catch {}
       }
 
       if (sock && remoteJid && m) {
@@ -637,8 +651,11 @@ export async function createSubBot(
       );
     }
 
-    const { state, saveCreds, close: closeAuthState } =
-      await useMultiFileAuthState(sessionPath);
+    const {
+      state,
+      saveCreds,
+      close: closeAuthState,
+    } = await useMultiFileAuthState(sessionPath);
 
     // ========================================================
     // SOCKET
@@ -767,6 +784,7 @@ export async function createSubBot(
           const wasConnected = isConnected;
 
           isConnected = true;
+          resetSubBotReconnectAttempts(senderId);
 
           if (timeout) {
             clearTimeout(timeout);
@@ -806,7 +824,7 @@ export async function createSubBot(
 
       try {
         closeAuthState();
-      } catch { }
+      } catch {}
 
       const reason =
         error?.output?.statusCode ||
@@ -814,7 +832,8 @@ export async function createSubBot(
         new Boom(error)?.output?.statusCode;
 
       console.log(
-        `[SUB-BOT] Conexión cerrada para ${senderId}. Código: ${reason || "N/A"
+        `[SUB-BOT] Conexión cerrada para ${senderId}. Código: ${
+          reason || "N/A"
         }.`,
       );
 
@@ -848,7 +867,7 @@ export async function createSubBot(
               recursive: true,
               force: true,
             });
-          } catch { }
+          } catch {}
         }
 
         syncSubBotsJson();
@@ -860,8 +879,33 @@ export async function createSubBot(
       // RECONEXIÓN
       // ====================================================
       if (!subSock.isClosedManually) {
+        const retryCount = registerSubBotReconnectAttempt(senderId);
+
+        if (retryCount >= MAX_SUBBOT_RECONNECT_ATTEMPTS) {
+          console.log(
+            chalk.red(
+              `[SUB-BOT] ${senderId} alcanzó ${MAX_SUBBOT_RECONNECT_ATTEMPTS} reintentos. Eliminando sesión...`,
+            ),
+          );
+
+          await destroySubBotSocket(senderId, subSock);
+
+          if (fs.existsSync(sessionPath)) {
+            try {
+              fs.rmSync(sessionPath, {
+                recursive: true,
+                force: true,
+              });
+            } catch {}
+          }
+
+          syncSubBotsJson();
+          resetSubBotReconnectAttempts(senderId);
+          return;
+        }
+
         console.log(
-          `[SUB-BOT] Reconectando sesión caída de ${senderId} en 7 segundos...`,
+          `[SUB-BOT] Reconectando sesión caída de ${senderId} en 7 segundos... intento ${retryCount}/${MAX_SUBBOT_RECONNECT_ATTEMPTS}`,
         );
 
         await destroySubBotSocket(senderId, subSock);

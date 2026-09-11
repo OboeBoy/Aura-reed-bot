@@ -1,5 +1,14 @@
-import makeWASocket, { useMultiFileAuthState, DisconnectReason, fetchLatestWaWebVersion, makeCacheableSignalKeyStore } from "@whiskeysockets/baileys";
-import { loadAllSubBots, syncSubBotsJson, setMainSocket } from "./models/subbotManager.js";
+import makeWASocket, {
+  useMultiFileAuthState,
+  DisconnectReason,
+  fetchLatestWaWebVersion,
+  makeCacheableSignalKeyStore,
+} from "@whiskeysockets/baileys";
+import {
+  loadAllSubBots,
+  syncSubBotsJson,
+  setMainSocket,
+} from "./models/subbotManager.js";
 import { Boom } from "@hapi/boom";
 import qrcodeTerminal from "qrcode-terminal";
 import pino from "pino";
@@ -112,10 +121,21 @@ const question = (text) =>
   });
 
 // VARIABLES DE VINCULACIÓN
+const MAX_MAIN_RECONNECT_ATTEMPTS = 2;
 let isPairingChoiceMade = false;
 let chosenPairingCode = false;
 let chosenPhoneNumber = "";
 let mainConnectionInProgress = false;
+let mainReconnectAttempts = 0;
+
+function resetMainReconnectAttempts() {
+  mainReconnectAttempts = 0;
+}
+
+function registerMainReconnectAttempt() {
+  mainReconnectAttempts += 1;
+  return mainReconnectAttempts;
+}
 
 // CONEXIÓN PRINCIPAL
 async function connectToWhatsApp() {
@@ -298,14 +318,14 @@ async function connectToWhatsApp() {
 
         console.log(
           "\n" +
-          chalk.green(`╭──────────────────────────────────────────╮\n`) +
-          chalk.green(`│ 🔑 CÓDIGO DE VINCULACIÓN PRINCIPAL:      │\n`) +
-          chalk.green(`│                                          │\n`) +
-          `│        ` +
-          chalk.bgGreen.black.bold(`  ${code.toUpperCase()}  `) +
-          `        │\n` +
-          chalk.green(`│                                          │\n`) +
-          chalk.green(`╰──────────────────────────────────────────╯\n`),
+            chalk.green(`╭──────────────────────────────────────────╮\n`) +
+            chalk.green(`│ 🔑 CÓDIGO DE VINCULACIÓN PRINCIPAL:      │\n`) +
+            chalk.green(`│                                          │\n`) +
+            `│        ` +
+            chalk.bgGreen.black.bold(`  ${code.toUpperCase()}  `) +
+            `        │\n` +
+            chalk.green(`│                                          │\n`) +
+            chalk.green(`╰──────────────────────────────────────────╯\n`),
         );
       } catch (err) {
         console.error(
@@ -357,6 +377,7 @@ async function connectToWhatsApp() {
     if (u.connection === "open") {
       const mainNum = sock.user?.id || sock.user?.jid;
 
+      resetMainReconnectAttempts();
       syncSubBotsJson(mainNum);
 
       console.log(chalk.green("✅ Bot Principal en línea y validado"));
@@ -388,12 +409,15 @@ async function connectToWhatsApp() {
     try {
       closeAuthState();
     } catch (closeError) {
-      console.error(chalk.gray(`[Auth] Error cerrando session.db: ${closeError.message}`));
+      console.error(
+        chalk.gray(`[Auth] Error cerrando session.db: ${closeError.message}`),
+      );
     }
 
     console.log(
       chalk.yellow(
-        `\nℹ️ Conexión cerrada. Código de estado: ${statusCode || "N/A"
+        `\nℹ️ Conexión cerrada. Código de estado: ${
+          statusCode || "N/A"
         }. Razón: ${errorMessage}`,
       ),
     );
@@ -464,8 +488,39 @@ async function connectToWhatsApp() {
       return;
     }
 
+    const retryCount = registerMainReconnectAttempt();
+
+    if (retryCount >= MAX_MAIN_RECONNECT_ATTEMPTS) {
+      console.log(
+        chalk.red(
+          `\n⚠️ Se alcanzaron ${MAX_MAIN_RECONNECT_ATTEMPTS} reintentos de reconexión del bot principal. Eliminando la sesión actual y reiniciando emparejamiento...`,
+        ),
+      );
+
+      const authFolder = "./sessions/principal";
+      if (fs.existsSync(authFolder)) {
+        try {
+          fs.rmSync(authFolder, {
+            recursive: true,
+            force: true,
+          });
+        } catch (e) {
+          console.error(chalk.red("Error al limpiar la sesión principal:"), e);
+        }
+      }
+
+      isPairingChoiceMade = false;
+      chosenPairingCode = false;
+      chosenPhoneNumber = "";
+      resetMainReconnectAttempts();
+
+      return;
+    }
+
     console.log(
-      chalk.yellow("⚠️ Conexión interrumpida. Reconectando en 5 segundos..."),
+      chalk.yellow(
+        `⚠️ Conexión interrumpida. Reconectando en 5 segundos... intento ${retryCount}/${MAX_MAIN_RECONNECT_ATTEMPTS}`,
+      ),
     );
 
     scheduleMainReconnect(5000);

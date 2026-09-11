@@ -9,7 +9,7 @@ import {
   generateMessageIDV2,
   unixTimestampSeconds,
   sha256,
-  proto
+  proto,
 } from "@whiskeysockets/baileys";
 import { fytBold } from "../../models/TextStyle.js";
 
@@ -42,7 +42,10 @@ const isAnimatedWebp = (b) => {
 
 const toWebp = async (buffer, animated = false) =>
   sharp(buffer, animated ? { animated: true } : {})
-    .resize(512, 512, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .resize(512, 512, {
+      fit: "contain",
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    })
     .webp({ quality: 80, ...(animated ? { loop: 0 } : {}) })
     .toBuffer();
 
@@ -99,21 +102,31 @@ const withRetry = async (fn, attempt = 1) => {
 
 const searchStickerly = (query) =>
   withRetry(async () => {
-    const { data } = await axios.get("https://api.alyacore.xyz/stickerly/search", {
-      params: { query, key: "oboe" }
-    });
+    const { data } = await axios.get(
+      "https://api.alyacore.xyz/stickerly/search",
+      {
+        params: { query, key: "oboe" },
+      },
+    );
     return data;
   });
 
 const getPackDetail = (url) =>
   withRetry(async () => {
-    const { data } = await axios.get("https://api.alyacore.xyz/stickerly/detail", {
-      params: { url, key: "oboe" }
-    });
+    const { data } = await axios.get(
+      "https://api.alyacore.xyz/stickerly/detail",
+      {
+        params: { url, key: "oboe" },
+      },
+    );
     return data;
   });
 
-const sendStickerPack = async (socket, remoteJid, { name, publisher, description, stickers, cover, quoted }) => {
+const sendStickerPack = async (
+  socket,
+  remoteJid,
+  { name, publisher, description, stickers, cover, quoted },
+) => {
   if (!stickers.length) throw new Error("Pack vacío");
   if (stickers.length > 60) throw new Error("Máximo 60 stickers por pack");
 
@@ -121,15 +134,17 @@ const sendStickerPack = async (socket, remoteJid, { name, publisher, description
   const files = {};
 
   const meta = stickers.map((s) => {
-    if (s.sticker.length > 1024 * 1024) throw new Error("Un sticker supera 1MB");
-    const fileName = sha256(s.sticker).toString("base64").replace(/\//g, "-") + ".webp";
+    if (s.sticker.length > 1024 * 1024)
+      throw new Error("Un sticker supera 1MB");
+    const fileName =
+      sha256(s.sticker).toString("base64").replace(/\//g, "-") + ".webp";
     files[fileName] = s.sticker;
     return {
       fileName,
       mimetype: "image/webp",
       isAnimated: !!s.isAnimated,
       emojis: s.emojis?.length ? s.emojis : ["🎭"],
-      accessibilityLabel: ""
+      accessibilityLabel: "",
     };
   });
 
@@ -138,10 +153,12 @@ const sendStickerPack = async (socket, remoteJid, { name, publisher, description
 
   const zipBuffer = makeZip(files);
 
-  const up = await encryptedStream(zipBuffer, "sticker-pack", { logger: socket.logger });
+  const up = await encryptedStream(zipBuffer, "sticker-pack", {
+    logger: socket.logger,
+  });
   const { directPath } = await socket.waUploadToServer(up.encFilePath, {
     fileEncSha256B64: up.fileEncSha256.toString("base64"),
-    mediaType: "sticker-pack"
+    mediaType: "sticker-pack",
   });
 
   const content = {
@@ -150,7 +167,8 @@ const sendStickerPack = async (socket, remoteJid, { name, publisher, description
       publisher,
       packDescription: description,
       stickerPackId: packId,
-      stickerPackOrigin: proto.Message.StickerPackMessage.StickerPackOrigin.THIRD_PARTY,
+      stickerPackOrigin:
+        proto.Message.StickerPackMessage.StickerPackOrigin.THIRD_PARTY,
       stickerPackSize: zipBuffer.length,
       stickers: meta,
       fileSha256: up.fileSha256,
@@ -159,12 +177,15 @@ const sendStickerPack = async (socket, remoteJid, { name, publisher, description
       directPath,
       fileLength: up.fileLength,
       mediaKeyTimestamp: unixTimestampSeconds(),
-      trayIconFileName
-    }
+      trayIconFileName,
+    },
   };
 
   const userJid = socket.user?.id || socket.user?.jid;
-  const m = generateWAMessageFromContent(remoteJid, content, { quoted, userJid });
+  const m = generateWAMessageFromContent(remoteJid, content, {
+    quoted,
+    userJid,
+  });
   await socket.relayMessage(remoteJid, m.message, { messageId: m.key.id });
   return m;
 };
@@ -180,7 +201,7 @@ export default {
 
     if (!query) {
       await socket.sendMessage(remoteJid, {
-        react: { text: "❌", key: message.key }
+        react: { text: "❌", key: message.key },
       });
       let text = `╭〔 ❌ ${fytBold("AURA REED")} 〕⬣\n`;
       text += `┃ ${fytBold("SINTAXIS INCORRECTA")}\n`;
@@ -193,7 +214,7 @@ export default {
     }
 
     await socket.sendMessage(remoteJid, {
-      react: { text: "⏳", key: message.key }
+      react: { text: "⏳", key: message.key },
     });
 
     try {
@@ -203,7 +224,7 @@ export default {
 
       if (!freePacks.length) {
         await socket.sendMessage(remoteJid, {
-          react: { text: "❌", key: message.key }
+          react: { text: "❌", key: message.key },
         });
         let text = `╭〔 ❌ ${fytBold("AURA REED")} 〕⬣\n`;
         text += `┃ ⚠️ ${fytBold("SIN RESULTADOS")}\n`;
@@ -211,7 +232,11 @@ export default {
         text += `┃ > No se encontraron packs para: "${query}".\n\n`;
         text += `╰〔 ⚡${fytBold("SYSTEM ALERT")} 〕⬣`;
 
-        return await socket.sendMessage(remoteJid, { text }, { quoted: message });
+        return await socket.sendMessage(
+          remoteJid,
+          { text },
+          { quoted: message },
+        );
       }
 
       const senderNum =
@@ -228,7 +253,7 @@ export default {
 
       if (!detail.status || !detail.detalles?.stickers?.length) {
         await socket.sendMessage(remoteJid, {
-          react: { text: "❌", key: message.key }
+          react: { text: "❌", key: message.key },
         });
         let text = `╭〔 ❌ ${fytBold("AURA REED")} 〕⬣\n`;
         text += `┃ ⚠️ ${fytBold("ERROR DE LECTURA")}\n`;
@@ -236,7 +261,11 @@ export default {
         text += `┃ > No se pudo obtener el contenido del paquete.\n\n`;
         text += `╰〔 ⚡${fytBold("SYSTEM ALERT")} 〕⬣`;
 
-        return await socket.sendMessage(remoteJid, { text }, { quoted: message });
+        return await socket.sendMessage(
+          remoteJid,
+          { text },
+          { quoted: message },
+        );
       }
 
       const { detalles } = detail;
@@ -250,7 +279,11 @@ export default {
       infoText += `┃ ⏳ Obteniendo Paquete...\n\n`;
       infoText += `╰〔 ⚡${fytBold("SYSTEM INFO")} 〕⬣`;
 
-      await socket.sendMessage(remoteJid, { text: infoText }, { quoted: message });
+      await socket.sendMessage(
+        remoteJid,
+        { text: infoText },
+        { quoted: message },
+      );
 
       const stickers = (
         await Promise.allSettled(
@@ -259,7 +292,7 @@ export default {
             const animated = s.isAnimated || isAnimatedWebp(buf);
             const webp = isWebp(buf) ? buf : await toWebp(buf, animated);
             return { sticker: webp, isAnimated: animated, emojis: ["🎭"] };
-          })
+          }),
         )
       )
         .filter((r) => r.status === "fulfilled")
@@ -267,7 +300,7 @@ export default {
 
       if (!stickers.length) {
         await socket.sendMessage(remoteJid, {
-          react: { text: "❌", key: message.key }
+          react: { text: "❌", key: message.key },
         });
         let text = `╭〔 ❌ ${fytBold("AURA REED")} 〕⬣\n`;
         text += `┃ ⚠️ ${fytBold("ERROR DE PROCESAMIENTO")}\n`;
@@ -275,7 +308,11 @@ export default {
         text += `┃ > No se pudo convertir ningún sticker del paquete.\n\n`;
         text += `╰〔 ⚡${fytBold("SYSTEM ALERT")} 〕⬣`;
 
-        return await socket.sendMessage(remoteJid, { text }, { quoted: message });
+        return await socket.sendMessage(
+          remoteJid,
+          { text },
+          { quoted: message },
+        );
       }
 
       const cover = await sharp(await toBuffer(detalles.thumbnailUrl))
@@ -289,16 +326,16 @@ export default {
         description: `${detalles.name} • Aura Reed Bot`,
         stickers,
         cover,
-        quoted: message
+        quoted: message,
       });
 
       await socket.sendMessage(remoteJid, {
-        react: { text: "✅", key: message.key }
+        react: { text: "✅", key: message.key },
       });
     } catch (error) {
       console.error(error);
       await socket.sendMessage(remoteJid, {
-        react: { text: "❌", key: message.key }
+        react: { text: "❌", key: message.key },
       });
 
       let text = `╭〔 ❌ ${fytBold("AURA REED")} 〕⬣\n`;
@@ -309,5 +346,5 @@ export default {
 
       await socket.sendMessage(remoteJid, { text }, { quoted: message });
     }
-  }
+  },
 };
