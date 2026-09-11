@@ -250,7 +250,7 @@ export function syncSubBotsJson(mainBotNumber = null) {
         if (parsed && typeof parsed === "object") {
           currentData = parsed;
         }
-      } catch {}
+      } catch { }
     }
 
     const registry = {};
@@ -393,30 +393,30 @@ async function destroySubBotSocket(senderId, subSock) {
 
   try {
     subSock.ev.removeAllListeners();
-  } catch {}
+  } catch { }
 
   try {
     subSock.ws?.removeAllListeners?.();
-  } catch {}
+  } catch { }
 
   try {
     subSock.ws?.close();
-  } catch {}
+  } catch { }
 
   try {
     activeSubBots.delete(senderId);
-  } catch {}
+  } catch { }
 
   // Persistir inmediatamente que el Sub-Bot quedó inactivo.
   try {
     syncSubBotsJson();
-  } catch {}
+  } catch { }
 
   // Muy importante:
   // libera DB y cache del sub-bot.
   try {
     closeSubBotDB(senderId);
-  } catch {}
+  } catch { }
 }
 
 // ============================================================
@@ -437,8 +437,8 @@ export async function stopSubBot(senderId) {
       try {
         subSock.isClosedManually = true;
 
-        await subSock.logout().catch(() => {});
-      } catch {}
+        await subSock.logout().catch(() => { });
+      } catch { }
 
       await destroySubBotSocket(senderId, subSock);
 
@@ -449,7 +449,7 @@ export async function stopSubBot(senderId) {
   } else {
     try {
       closeSubBotDB(senderId);
-    } catch {}
+    } catch { }
   }
 
   if (fs.existsSync(sessionPath)) {
@@ -517,10 +517,10 @@ export async function createSubBot(
   const sender = isAutoload
     ? null
     : m?.key?.participantPn ||
-      m?.key?.participantAlt ||
-      m?.key?.participant ||
-      m?.key?.remoteJidAlt ||
-      m?.key?.remoteJid;
+    m?.key?.participantAlt ||
+    m?.key?.participant ||
+    m?.key?.remoteJidAlt ||
+    m?.key?.remoteJid;
 
   const senderId =
     autoSenderId ||
@@ -586,7 +586,7 @@ export async function createSubBot(
       } else {
         try {
           closeSubBotDB(senderId);
-        } catch {}
+        } catch { }
       }
 
       if (sock && remoteJid && m) {
@@ -637,11 +637,8 @@ export async function createSubBot(
       );
     }
 
-    const {
-      state,
-      saveCreds,
-      close: closeAuthState,
-    } = await useMultiFileAuthState(sessionPath);
+    const { state, saveCreds, close: closeAuthState } =
+      await useMultiFileAuthState(sessionPath);
 
     // ========================================================
     // SOCKET
@@ -809,7 +806,7 @@ export async function createSubBot(
 
       try {
         closeAuthState();
-      } catch {}
+      } catch { }
 
       const reason =
         error?.output?.statusCode ||
@@ -817,8 +814,7 @@ export async function createSubBot(
         new Boom(error)?.output?.statusCode;
 
       console.log(
-        `[SUB-BOT] Conexión cerrada para ${senderId}. Código: ${
-          reason || "N/A"
+        `[SUB-BOT] Conexión cerrada para ${senderId}. Código: ${reason || "N/A"
         }.`,
       );
 
@@ -852,7 +848,7 @@ export async function createSubBot(
               recursive: true,
               force: true,
             });
-          } catch {}
+          } catch { }
         }
 
         syncSubBotsJson();
