@@ -19,9 +19,17 @@ let saveTimer = null;
 let saving = false;
 let initialized = false;
 
-// Create node-cache instances with standard TTL of 10 minutes (600 seconds) and useClones: false
-export const groupsCache = new NodeCache({ stdTTL: 600, useClones: false });
-export const usersCache = new NodeCache({ stdTTL: 600, useClones: false });
+// Create node-cache instances with standard TTL of 10 minutes (600 seconds), bounded memory and no cloning
+export const groupsCache = new NodeCache({
+  stdTTL: 600,
+  useClones: false,
+  maxKeys: 5000,
+});
+export const usersCache = new NodeCache({
+  stdTTL: 600,
+  useClones: false,
+  maxKeys: 5000,
+});
 
 const DEFAULT_DB_CONFIG = {
   selfMode: false,

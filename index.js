@@ -1,5 +1,14 @@
-import makeWASocket, { useMultiFileAuthState, DisconnectReason, fetchLatestWaWebVersion, makeCacheableSignalKeyStore } from "@whiskeysockets/baileys";
-import { loadAllSubBots, syncSubBotsJson, setMainSocket } from "./models/subbotManager.js";
+import makeWASocket, {
+  useMultiFileAuthState,
+  DisconnectReason,
+  fetchLatestWaWebVersion,
+  makeCacheableSignalKeyStore,
+} from "@whiskeysockets/baileys";
+import {
+  loadAllSubBots,
+  syncSubBotsJson,
+  setMainSocket,
+} from "./models/subbotManager.js";
 import { Boom } from "@hapi/boom";
 import qrcodeTerminal from "qrcode-terminal";
 import pino from "pino";
@@ -19,6 +28,7 @@ import {
   flushAllSubBotDBs,
   groupMetadataCache,
 } from "./models/subbotWorker.js";
+import { stopCommandWatchers } from "./controllers/msgHandler.js";
 // Un solo logger reutilizable.
 // Evita crear instancias de pino innecesariamente.
 const logger = pino({
@@ -34,11 +44,30 @@ startCleanCacheTimer(db, saveDB);
 
 // CIERRE LIMPIO
 let shuttingDown = false;
+let reconnectTimer = null;
+
+function scheduleMainReconnect(delayMs) {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+  }
+
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    connectToWhatsApp();
+  }, delayMs);
+}
 
 async function saveAndExit(signal) {
   if (shuttingDown) return;
 
   shuttingDown = true;
+
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+
+  stopCommandWatchers();
 
   console.log(
     chalk.gray(
@@ -278,14 +307,14 @@ async function connectToWhatsApp() {
 
         console.log(
           "\n" +
-          chalk.green(`╭──────────────────────────────────────────╮\n`) +
-          chalk.green(`│ 🔑 CÓDIGO DE VINCULACIÓN PRINCIPAL:      │\n`) +
-          chalk.green(`│                                          │\n`) +
-          `│        ` +
-          chalk.bgGreen.black.bold(`  ${code.toUpperCase()}  `) +
-          `        │\n` +
-          chalk.green(`│                                          │\n`) +
-          chalk.green(`╰──────────────────────────────────────────╯\n`),
+            chalk.green(`╭──────────────────────────────────────────╮\n`) +
+            chalk.green(`│ 🔑 CÓDIGO DE VINCULACIÓN PRINCIPAL:      │\n`) +
+            chalk.green(`│                                          │\n`) +
+            `│        ` +
+            chalk.bgGreen.black.bold(`  ${code.toUpperCase()}  `) +
+            `        │\n` +
+            chalk.green(`│                                          │\n`) +
+            chalk.green(`╰──────────────────────────────────────────╯\n`),
         );
       } catch (err) {
         console.error(
@@ -368,12 +397,15 @@ async function connectToWhatsApp() {
     try {
       closeAuthState();
     } catch (closeError) {
-      console.error(chalk.gray(`[Auth] Error cerrando session.db: ${closeError.message}`));
+      console.error(
+        chalk.gray(`[Auth] Error cerrando session.db: ${closeError.message}`),
+      );
     }
 
     console.log(
       chalk.yellow(
-        `\nℹ️ Conexión cerrada. Código de estado: ${statusCode || "N/A"
+        `\nℹ️ Conexión cerrada. Código de estado: ${
+          statusCode || "N/A"
         }. Razón: ${errorMessage}`,
       ),
     );
@@ -439,7 +471,7 @@ async function connectToWhatsApp() {
         chalk.cyan("Iniciando nuevo proceso de vinculación en 3 segundos..."),
       );
 
-      setTimeout(connectToWhatsApp, 3000);
+      scheduleMainReconnect(3000);
 
       return;
     }
@@ -448,7 +480,7 @@ async function connectToWhatsApp() {
       chalk.yellow("⚠️ Conexión interrumpida. Reconectando en 5 segundos..."),
     );
 
-    setTimeout(connectToWhatsApp, 5000);
+    scheduleMainReconnect(5000);
   });
 }
 

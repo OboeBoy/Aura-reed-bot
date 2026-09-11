@@ -85,6 +85,29 @@ if (!fs.existsSync(sessionsDir)) {
 // ============================================================
 
 const activeSubBots = new Map();
+const subBotReconnectTimers = new Map();
+
+function clearSubBotReconnectTimer(senderId) {
+  const timer = subBotReconnectTimers.get(senderId);
+  if (timer) {
+    clearTimeout(timer);
+    subBotReconnectTimers.delete(senderId);
+  }
+}
+
+function scheduleSubBotReconnect(senderId, fn) {
+  clearSubBotReconnectTimer(senderId);
+  const timer = setTimeout(() => {
+    subBotReconnectTimers.delete(senderId);
+    fn().catch((err) => {
+      console.error(
+        `[SUB-BOT] Error reconectando ${senderId}:`,
+        err?.message || err,
+      );
+    });
+  }, 7000);
+  subBotReconnectTimers.set(senderId, timer);
+}
 
 // ============================================================
 // SESIONES
@@ -227,7 +250,7 @@ export function syncSubBotsJson(mainBotNumber = null) {
         if (parsed && typeof parsed === "object") {
           currentData = parsed;
         }
-      } catch { }
+      } catch {}
     }
 
     const registry = {};
@@ -365,30 +388,35 @@ async function destroySubBotSocket(senderId, subSock) {
     return;
   }
 
+  clearSubBotReconnectTimer(senderId);
   subSock.isClosedManually = true;
 
   try {
     subSock.ev.removeAllListeners();
-  } catch { }
+  } catch {}
+
+  try {
+    subSock.ws?.removeAllListeners?.();
+  } catch {}
 
   try {
     subSock.ws?.close();
-  } catch { }
+  } catch {}
 
   try {
     activeSubBots.delete(senderId);
-  } catch { }
+  } catch {}
 
   // Persistir inmediatamente que el Sub-Bot quedó inactivo.
   try {
     syncSubBotsJson();
-  } catch { }
+  } catch {}
 
   // Muy importante:
   // libera DB y cache del sub-bot.
   try {
     closeSubBotDB(senderId);
-  } catch { }
+  } catch {}
 }
 
 // ============================================================
@@ -397,6 +425,8 @@ async function destroySubBotSocket(senderId, subSock) {
 
 export async function stopSubBot(senderId) {
   const sessionPath = path.join(sessionsDir, senderId);
+
+  clearSubBotReconnectTimer(senderId);
 
   let handled = false;
 
@@ -407,8 +437,8 @@ export async function stopSubBot(senderId) {
       try {
         subSock.isClosedManually = true;
 
-        await subSock.logout().catch(() => { });
-      } catch { }
+        await subSock.logout().catch(() => {});
+      } catch {}
 
       await destroySubBotSocket(senderId, subSock);
 
@@ -419,7 +449,7 @@ export async function stopSubBot(senderId) {
   } else {
     try {
       closeSubBotDB(senderId);
-    } catch { }
+    } catch {}
   }
 
   if (fs.existsSync(sessionPath)) {
@@ -487,10 +517,10 @@ export async function createSubBot(
   const sender = isAutoload
     ? null
     : m?.key?.participantPn ||
-    m?.key?.participantAlt ||
-    m?.key?.participant ||
-    m?.key?.remoteJidAlt ||
-    m?.key?.remoteJid;
+      m?.key?.participantAlt ||
+      m?.key?.participant ||
+      m?.key?.remoteJidAlt ||
+      m?.key?.remoteJid;
 
   const senderId =
     autoSenderId ||
@@ -556,7 +586,7 @@ export async function createSubBot(
       } else {
         try {
           closeSubBotDB(senderId);
-        } catch { }
+        } catch {}
       }
 
       if (sock && remoteJid && m) {
@@ -607,8 +637,11 @@ export async function createSubBot(
       );
     }
 
-    const { state, saveCreds, close: closeAuthState } =
-      await useMultiFileAuthState(sessionPath);
+    const {
+      state,
+      saveCreds,
+      close: closeAuthState,
+    } = await useMultiFileAuthState(sessionPath);
 
     // ========================================================
     // SOCKET
@@ -776,7 +809,7 @@ export async function createSubBot(
 
       try {
         closeAuthState();
-      } catch { }
+      } catch {}
 
       const reason =
         error?.output?.statusCode ||
@@ -784,7 +817,8 @@ export async function createSubBot(
         new Boom(error)?.output?.statusCode;
 
       console.log(
-        `[SUB-BOT] Conexión cerrada para ${senderId}. Código: ${reason || "N/A"
+        `[SUB-BOT] Conexión cerrada para ${senderId}. Código: ${
+          reason || "N/A"
         }.`,
       );
 
@@ -818,7 +852,7 @@ export async function createSubBot(
               recursive: true,
               force: true,
             });
-          } catch { }
+          } catch {}
         }
 
         syncSubBotsJson();
@@ -834,18 +868,8 @@ export async function createSubBot(
           `[SUB-BOT] Reconectando sesión caída de ${senderId} en 7 segundos...`,
         );
 
-        // Liberar el socket anterior
-        // antes de crear uno nuevo.
         await destroySubBotSocket(senderId, subSock);
-
-        setTimeout(() => {
-          start().catch((err) => {
-            console.error(
-              `[SUB-BOT] Error reconectando ${senderId}:`,
-              err.message,
-            );
-          });
-        }, 7000);
+        scheduleSubBotReconnect(senderId, start);
       }
     });
 

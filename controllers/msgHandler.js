@@ -47,6 +47,7 @@ const DEFAULT_PREFIXES = [".", "#", "/", "!", "-", "%", "$"];
 const loadedFiles = new Map(); // ruta relativa -> módulo cargado
 let watchersReady = false;
 const pendingReload = new Map(); // debounce por archivo
+const commandWatchers = new Set();
 
 function isMiddlewareModule(cmd) {
   return Boolean(cmd && typeof cmd.middleware === "function");
@@ -125,10 +126,11 @@ function initCommandWatchers() {
     if (!fs.existsSync(folderPath)) continue;
 
     try {
-      fs.watch(folderPath, (eventType, filename) => {
+      const watcher = fs.watch(folderPath, (eventType, filename) => {
         if (!filename || !filename.endsWith(".js")) return;
         scheduleReload(cat, filename);
       });
+      commandWatchers.add(watcher);
     } catch (e) {
       console.error(
         chalk.red(`[Comandos] No se pudo observar ${folderPath}:`),
@@ -136,6 +138,16 @@ function initCommandWatchers() {
       );
     }
   }
+}
+
+export function stopCommandWatchers() {
+  for (const watcher of commandWatchers) {
+    try {
+      watcher.close();
+    } catch {}
+  }
+  commandWatchers.clear();
+  watchersReady = false;
 }
 
 async function ensureCommandsLoaded() {
