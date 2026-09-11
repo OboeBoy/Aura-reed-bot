@@ -28,7 +28,6 @@ import {
   flushAllSubBotDBs,
   groupMetadataCache,
 } from "./models/subbotWorker.js";
-import { stopCommandWatchers } from "./controllers/msgHandler.js";
 // Un solo logger reutilizable.
 // Evita crear instancias de pino innecesariamente.
 const logger = pino({
@@ -66,9 +65,6 @@ async function saveAndExit(signal) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
   }
-
-  stopCommandWatchers();
-
   console.log(
     chalk.gray(
       `\n[EXIT] Señal recibida: ${signal}. Guardando base de datos...`,
