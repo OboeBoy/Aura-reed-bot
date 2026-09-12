@@ -298,6 +298,7 @@ export async function processHangmanGuess(
     const user = globalDb.users[participantJid];
     user.xp = (user.xp || 0) + earnedXp;
     user.level = Math.floor(user.xp / 150) + 1;
+    saveDB(globalDb);
 
     await sendGameState(
       socket,

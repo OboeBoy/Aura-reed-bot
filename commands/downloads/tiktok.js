@@ -51,7 +51,7 @@ async function DL_TIKTOK(input) {
       throw new Error("No se encontró ningún enlace válido para la búsqueda.");
     }
 
-    const URL_TIKTOK = `https://www.tikwm.com/api/?url=${encodeURIComponent(targetUrl)}`;
+    const URL_TIKTOK = `https://api.alyacore.xyz/dl/tiktokv2?url=${encodeURIComponent(targetUrl)}&key=${global.Apis.apiAiya.apikey}`;
     const dateCreate = (ts) =>
       new Date(Number(ts) * 1000).toLocaleDateString("es-ES");
 
@@ -60,25 +60,32 @@ async function DL_TIKTOK(input) {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         Accept: "application/json, text/plain, */*",
-        Referer: "https://www.tikwm.com/",
-        Origin: "https://www.tikwm.com",
       },
       timeout: 15000,
     });
 
-    if (data.code === 0 && data.data && data.data.play) {
-      const r = data.data;
+    if (data.status && Array.isArray(data.data) && data.data.length > 0) {
+      const r = data;
+      const media =
+        r.data.find((item) => item.type === "nowatermark_hd") ||
+        r.data.find((item) => item.type === "nowatermark") ||
+        r.data.find((item) => item.type === "watermark");
+
+      if (!media?.url) {
+        throw new Error("La respuesta no contiene un enlace de video válido.");
+      }
+
       return {
-        video_dl: r.play,
+        video_dl: media.url,
         title: r.title || "Video de TikTok",
-        authorNick: r.author?.nickname || "Desconocido",
-        likes: formatter(r.digg_count || 0),
-        views: formatter(r.play_count || 0),
-        shares: formatter(r.share_count || 0),
-        collect: formatter(r.collect_count || 0),
-        comments: formatter(r.comment_count || 0),
-        time: dateCreate(r.create_time || 0),
-        tk_url: `https://www.tiktok.com/@${r.author.unique_id}/video/${r.id}`,
+        authorNick: r.author?.nickname || r.author?.fullname || "Desconocido",
+        likes: r.stats?.likes || formatter(r.digg_count || 0),
+        views: r.stats?.views || formatter(r.play_count || 0),
+        shares: r.stats?.share || formatter(r.share_count || 0),
+        collect: r.stats?.download || formatter(r.collect_count || 0),
+        comments: r.stats?.comment || formatter(r.comment_count || 0),
+        time: r.taken_at || dateCreate(r.create_time || 0),
+        tk_url: `https://www.tiktok.com/@${r.author?.nickname || "video"}/video/${r.id}`,
       };
     }
     throw new Error("No se pudieron extraer los datos del video con TikWM.");
@@ -171,7 +178,7 @@ export default {
         });
         try {
           fs.unlinkSync(inputP);
-        } catch {}
+        } catch { }
         return await socket.sendMessage(
           remoteJid,
           {
@@ -284,13 +291,13 @@ export default {
     } finally {
       try {
         if (fs.existsSync(inputP)) fs.unlinkSync(inputP);
-      } catch {}
+      } catch { }
       try {
         if (fs.existsSync(outP)) fs.unlinkSync(outP);
-      } catch {}
+      } catch { }
       try {
         if (fs.existsSync(whatsappReadyPath)) fs.unlinkSync(whatsappReadyPath);
-      } catch {}
+      } catch { }
     }
   },
 };
