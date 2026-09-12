@@ -77,18 +77,14 @@ class MediaProcessor {
     });
   }
 
-  async copyStream(input, output) {
-    const params = ["-y", "-i", input, "-c", "copy", "-movflags", "+faststart", output];
-    await this.execute(params);
-  }
-
   async transcode(input, output) {
     const params = [
       "-y", "-i", input,
       "-c:v", "libx264",
-      "-preset", "veryfast",
-      "-crf", "24",
-      "-max_muxing_queue_size", "1024",
+      "-preset", "fast",
+      "-crf", "20",
+      "-maxrate", "2M",
+      "-bufsize", "2M",
       "-profile:v", "high",
       "-level", "4.1",
       "-pix_fmt", "yuv420p",
@@ -148,10 +144,7 @@ async function DL_CORE(input) {
     const client = new ResourceFetcher(global.Apis.apiAiya.apikey);
     let target = parseResourceURI(input);
     
-    if (!target) {
-      target = await client.query(input);
-    }
-    
+    if (!target) target = await client.query(input);
     if (!target) throw new Error(mCompiler.nodes[2]);
 
     const data = await client.resolve(target);
@@ -184,7 +177,7 @@ async function streamPipe(url, destPath) {
       "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36 Cache/" + mCompiler.allocateHeader(0x0)
     }
   });
-  const writer = fs.createWriteStream(destPath);
+  const writer = fs.createWriteStream(destPath, { highWaterMark: 1024 * 1024 });
   await pipeline(response.data, writer); 
 }
 
@@ -205,7 +198,7 @@ export default {
       }, { quoted: message });
     }
 
-    await socket.sendMessage(remoteJid, { react: { text: "⏳", key: message.key } });
+    socket.sendMessage(remoteJid, { react: { text: "⏳", key: message.key } }).catch(() => {});
 
     const id = crypto.randomBytes(16).toString("hex").substring(0, 12);
     const inputP = path.join(_0x1a2b3c, `t_${id}_a.mp4`);
@@ -213,13 +206,14 @@ export default {
 
     try {
       const result = await DL_CORE(text);
+      
       await streamPipe(result.video_dl, inputP);
-
+      
       const stats = await fsPromises.stat(inputP);
       const sizeMB = stats.size / (1024 * 1024);
 
       if (sizeMB > MAX_INPUT_MB) {
-        await socket.sendMessage(remoteJid, { react: { text: "❌", key: message.key } });
+        socket.sendMessage(remoteJid, { react: { text: "❌", key: message.key } }).catch(() => {});
         return await socket.sendMessage(remoteJid, {
           text: `😦 ¡Mae Ponete serio! 💀🙏\n Este video pesa más que una vieja de Kilos Mortales.`,
         }, { quoted: message });
@@ -228,20 +222,13 @@ export default {
       let finalPath = inputP;
 
       if (sizeMB > 60) {
-        await socket.sendMessage(remoteJid, { react: { text: "⚠️", key: message.key } });
+        socket.sendMessage(remoteJid, { react: { text: "⚠️", key: message.key } }).catch(() => {});
         await socket.sendMessage(remoteJid, {
           text: `¡Uy mae! Este video pesa mucho, lo estoy optimizando sin perder calidad...\nDame chance.`,
         }, { quoted: message });
 
         try {
           await mProcessor.transcode(inputP, outP);
-          finalPath = outP;
-        } catch (e) {
-          console.log(e.message);
-        }
-      } else {
-        try {
-          await mProcessor.copyStream(inputP, outP);
           finalPath = outP;
         } catch (e) {
           console.log(e.message);
@@ -267,13 +254,16 @@ export default {
         caption: caption,
         mimetype: "video/mp4",
         fileName: "tiktok.mp4",
+        contextInfo: {
+          isForwarded: true,
+          forwardingScore: 999
+        }
       }, { quoted: message });
 
-      await socket.sendMessage(remoteJid, { react: { text: "✅", key: message.key } });
+      socket.sendMessage(remoteJid, { react: { text: "✅", key: message.key } }).catch(() => {});
 
     } catch (error) {
-      await socket.sendMessage(remoteJid, { react: { text: "❌", key: message.key } });
-
+      socket.sendMessage(remoteJid, { react: { text: "❌", key: message.key } }).catch(() => {});
       const errorMsg = error.message || "Ocurrió un error inesperado.";
       await socket.sendMessage(remoteJid, {
         text: `╭〔 ❌ ${fytBold("AURA REED")} 〕⬣\n┃ ⚠️ ${fytBold("ERROR REAL")}\n╰━━━━━━━━━━━━⬣\n\n┃ > ${errorMsg}\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣`,
