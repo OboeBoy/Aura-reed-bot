@@ -1,6 +1,6 @@
 import { jidNormalizedUser } from "@whiskeysockets/baileys";
 import { fytBold } from "../../models/TextStyle.js";
-import { createCanvas } from "canvas";
+import { createCanvas } from "@napi-rs/canvas";
 import { getDBSync } from "../../models/db.js";
 import { activeHangmanGames, gameKey } from "../../models/gameState.js";
 import { hangmanWords } from "../../controllers/gameConfig.js";
