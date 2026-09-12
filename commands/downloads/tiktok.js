@@ -12,7 +12,6 @@ import { fytBold } from "../../models/TextStyle.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const customTemp = path.join(__dirname, "../../tmp");
 
-// Forzamos al sistema de Node a usar la carpeta local y evitar el /tmp del sistema
 process.env.TMPDIR = customTemp;
 process.env.TEMP = customTemp;
 process.env.TMP = customTemp;
@@ -20,7 +19,6 @@ process.env.TMP = customTemp;
 const execAsync = promisify(exec);
 const tmp = customTemp;
 
-// Aseguramos que el directorio exista de forma asíncrona
 if (!fs.existsSync(tmp)) fs.mkdirSync(tmp, { recursive: true });
 
 function validateTikTokUrl(url) {
@@ -30,14 +28,36 @@ function validateTikTokUrl(url) {
   return match ? match[0] : null;
 }
 
+// ✨ NUEVA FUNCIÓN: Ping para verificar que el host responda antes de gastar procesos
+async function pingApi() {
+  try {
+    const startTime = Date.now();
+    // Petición ligera de solo 3 segundos de tolerancia
+    await axios.get("https://api.alyacore.xyz", { timeout: 3000 });
+    const pingMs = Date.now() - startTime;
+    return { isAlive: true, ms: pingMs };
+  } catch (error) {
+    // Si da un error HTTP (ej. 404) significa que el servidor SÍ está vivo, solo la ruta no existe.
+    // Si da error de red (timeout, ECONNREFUSED), está completamente muerto.
+    if (error.response) return { isAlive: true, ms: 0 }; 
+    return { isAlive: false, error: error.message };
+  }
+}
+
 async function DL_TIKTOK(input) {
   try {
     let targetUrl = validateTikTokUrl(input);
+    const APIKEY = global.Apis.apiAiya.apikey;
 
+    // 1. Fase de Búsqueda (Si no pasaron un enlace directo)
     if (!targetUrl) {
-      const APIKEY = global.Apis.apiAiya.apikey;
       const alyaUrl = `https://api.alyacore.xyz/search/tiktok?query=${encodeURIComponent(input)}&key=${APIKEY}`;
       const { data: alyaData } = await axios.get(alyaUrl, { timeout: 15000 });
+
+      // Verificamos si la API misma bloqueó la solicitud
+      if (!alyaData.status && alyaData.message) {
+        throw new Error(`API Error (Búsqueda): ${alyaData.message}`);
+      }
 
       if (alyaData.status && Array.isArray(alyaData.data) && alyaData.data.length > 0) {
         targetUrl = alyaData.data[0].url;
@@ -46,16 +66,22 @@ async function DL_TIKTOK(input) {
 
     if (!targetUrl) throw new Error("No se encontró ningún enlace válido para la búsqueda.");
 
-    const URL_TIKTOK = `https://api.alyacore.xyz/dl/tiktokv2?url=${encodeURIComponent(targetUrl)}&key=${global.Apis.apiAiya.apikey}`;
+    // 2. Fase de Extracción del Video
+    const URL_TIKTOK = `https://api.alyacore.xyz/dl/tiktokv2?url=${encodeURIComponent(targetUrl)}&key=${APIKEY}`;
     const dateCreate = (ts) => new Date(Number(ts) * 1000).toLocaleDateString("es-ES");
 
     const { data } = await axios.get(URL_TIKTOK, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         Accept: "application/json, text/plain, */*",
       },
       timeout: 15000,
     });
+
+    // Filtro estricto: Si la API responde OK pero el "status" interno es falso (ej. rate-overlimit)
+    if (!data.status && data.message) {
+        throw new Error(`API Error (Descarga): ${data.message}`);
+    }
 
     if (data.status && Array.isArray(data.data) && data.data.length > 0) {
       const r = data;
@@ -78,7 +104,6 @@ async function DL_TIKTOK(input) {
   }
 }
 
-// OPTIMIZADO: Usando streams nativos de Axios (Más rápido y consume menos RAM)
 async function descargarAArchivo(url, destPath) {
   const response = await axios({
     url,
@@ -124,6 +149,15 @@ export default {
 
     await socket.sendMessage(remoteJid, { react: { text: "⏳", key: message.key } });
 
+    // ✨ PING PREVENTIVO ANTES DE HACER CUALQUIER OTRA COSA
+    const pingStatus = await pingApi();
+    if (!pingStatus.isAlive) {
+      await socket.sendMessage(remoteJid, { react: { text: "❌", key: message.key } });
+      return await socket.sendMessage(remoteJid, {
+        text: `╭〔 ❌ ${fytBold("AURA REED")} 〕⬣\n┃ ⚠️ ${fytBold("API DESCONECTADA")}\n╰━━━━━━━━━━━━⬣\n\n┃ > El servidor de descargas no responde.\n┃ > Ping fallido: ${pingStatus.error}\n┃ > Intenta nuevamente en unos minutos.\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣`,
+      }, { quoted: message });
+    }
+
     const id = crypto.randomBytes(8).toString("hex");
     const inputP = path.join(tmp, `tt_${id}.mp4`);
     const outP = path.join(tmp, `tt_${id}_out.mp4`);
@@ -133,7 +167,6 @@ export default {
       const result = await DL_TIKTOK(text);
       await descargarAArchivo(result.video_dl, inputP);
 
-      // OPTIMIZADO: fsPromises para no bloquear el Bot
       const stats = await fsPromises.stat(inputP);
       const sizeMB = stats.size / (1024 * 1024);
 
@@ -211,7 +244,6 @@ export default {
       }, { quoted: message });
 
     } finally {
-      //  OPTIMIZADO: Eliminación de archivos asíncrona concurrente
       const filesToDelete = [inputP, outP, whatsappReadyPath];
       await Promise.allSettled(
         filesToDelete.map(file => fsPromises.unlink(file).catch(() => {}))
