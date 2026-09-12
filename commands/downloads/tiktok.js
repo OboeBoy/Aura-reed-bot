@@ -77,6 +77,16 @@ class MediaProcessor {
     });
   }
 
+  async remux(input, output) {
+    const params = [
+      "-y", "-i", input,
+      "-c", "copy",
+      "-movflags", "+faststart",
+      output
+    ];
+    await this.execute(params);
+  }
+
   async transcode(input, output) {
     const params = [
       "-y", "-i", input,
@@ -229,6 +239,13 @@ export default {
 
         try {
           await mProcessor.transcode(inputP, outP);
+          finalPath = outP;
+        } catch (e) {
+          console.log(e.message);
+        }
+      } else {
+        try {
+          await mProcessor.remux(inputP, outP);
           finalPath = outP;
         } catch (e) {
           console.log(e.message);
