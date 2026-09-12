@@ -1,8 +1,8 @@
 import path from "path";
 import { fileURLToPath } from "url";
 import axios from "axios";
-import { exec } from "child_process";
-import { promisify } from "util";
+import { spawn } from "child_process"; // ✨ Parche: Usamos spawn en vez de exec
+import { pipeline } from "stream/promises"; // ✨ Parche: Evita memory leaks en descargas
 import fs from "fs";
 import fsPromises from "fs/promises";
 import crypto from "crypto";
@@ -16,9 +16,7 @@ process.env.TMPDIR = customTemp;
 process.env.TEMP = customTemp;
 process.env.TMP = customTemp;
 
-const execAsync = promisify(exec);
 const tmp = customTemp;
-
 if (!fs.existsSync(tmp)) fs.mkdirSync(tmp, { recursive: true });
 
 function validateTikTokUrl(url) {
@@ -27,6 +25,21 @@ function validateTikTokUrl(url) {
   const match = url.match(regex);
   return match ? match[0] : null;
 }
+
+//  PARCHE DE MEMORIA: Ejecuta FFmpeg sin saturar el buffer de RAM de Node.js
+const runFfmpeg = (args) => {
+  return new Promise((resolve, reject) => {
+    // stdio: "ignore" manda los logs al vacío, ahorrando 100% de la RAM del proceso
+    const proc = spawn("ffmpeg", args, { stdio: "ignore" });
+    
+    proc.on("close", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`FFmpeg finalizó con código de error: ${code}`));
+    });
+    
+    proc.on("error", (err) => reject(err));
+  });
+};
 
 async function DL_TIKTOK(input) {
   try {
@@ -95,19 +108,37 @@ async function descargarAArchivo(url, destPath) {
   });
 
   const writer = fs.createWriteStream(destPath);
-  response.data.pipe(writer);
-
-  return new Promise((resolve, reject) => {
-    writer.on('finish', resolve);
-    writer.on('error', reject);
-  });
+  // PARCHE DE MEMORIA: pipeline maneja la recolección de basura (Garbage Collection) sola
+  await pipeline(response.data, writer); 
 }
 
-async function processVideoFile(inputP, outP) {
-  await execAsync(
-    `ffmpeg -y -i "${inputP}" -vf "scale='min(1920,iw)':-2" -c:v libx264 -preset ultrafast -crf 28 -c:a aac -b:a 128k "${outP}"`,
-    { maxBuffer: 1024 * 1024 * 10 },
-  );
+//  PARCHE DE CALIDAD: Perfil Alto, CRF 22 (casi sin pérdida visual) y formato de pixel seguro
+async function compressHeavyVideo(inputP, outP) {
+  const args = [
+    "-y", "-i", inputP,
+    "-c:v", "libx264",
+    "-preset", "medium",
+    "-crf", "22",
+    "-profile:v", "high",
+    "-level", "4.1",
+    "-pix_fmt", "yuv420p",
+    "-c:a", "aac",
+    "-b:a", "128k",
+    "-movflags", "+faststart",
+    outP
+  ];
+  await runFfmpeg(args);
+}
+
+// Para videos de menos de 60MB
+async function protectVideoBitrate(inputP, outP) {
+  const args = [
+    "-y", "-i", inputP,
+    "-c", "copy",
+    "-movflags", "+faststart",
+    outP
+  ];
+  await runFfmpeg(args);
 }
 
 const MAX_INPUT_MB = 500;
@@ -135,8 +166,6 @@ export default {
 
     try {
       const result = await DL_TIKTOK(text);
-      
-      // Descarga súper rápida por streams
       await descargarAArchivo(result.video_dl, inputP);
 
       const stats = await fsPromises.stat(inputP);
@@ -151,19 +180,24 @@ export default {
 
       let finalPath = inputP;
 
-      // SOLO procesamos con FFmpeg si de verdad pesa más de 60MB (Lento)
-      // Si pesa menos, pasa directo al envío (Súper Rápido)
       if (sizeMB > 60) {
         await socket.sendMessage(remoteJid, { react: { text: "⚠️", key: message.key } });
         await socket.sendMessage(remoteJid, {
-          text: `¡Uy mae! Este video pesa mucho, voy a tener que hacerlo más liviano.\nDame chance ....`,
+          text: `¡Uy mae! Este video pesa mucho, lo estoy optimizando sin perder calidad...\nDame chance.`,
         }, { quoted: message });
 
         try {
-          await processVideoFile(inputP, outP);
+          await compressHeavyVideo(inputP, outP);
           finalPath = outP;
         } catch (e) {
-          console.error("No se pudo procesar el video, se manda el original:", e.message);
+          console.error("Fallo al comprimir video pesado:", e.message);
+        }
+      } else {
+        try {
+          await protectVideoBitrate(inputP, outP);
+          finalPath = outP;
+        } catch (e) {
+          console.error("Fallo al proteger bitrate, mandando original:", e.message);
         }
       }
 
@@ -181,7 +215,6 @@ export default {
       caption += `┃ > ${fytBold("Url")} › ${result.tk_url}\n`;
       caption += `╰〔 ⚡ ${fytBold("SYSTEM ACTIVE")} 〕⬣`;
 
-      // Envío inmediato a Baileys
       await socket.sendMessage(remoteJid, {
         video: { url: finalPath },
         caption: caption,
@@ -201,7 +234,6 @@ export default {
       }, { quoted: message });
 
     } finally {
-      // Limpieza sin trabar el bot
       const filesToDelete = [inputP, outP];
       await Promise.allSettled(
         filesToDelete.map(file => fsPromises.unlink(file).catch(() => {}))
