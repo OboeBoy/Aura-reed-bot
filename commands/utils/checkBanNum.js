@@ -6,6 +6,10 @@ function validNumber(num) {
   return /^\d{7,15}$/.test(num);
 }
 
+function normalizeNumber(value) {
+  return String(value || "").replace(/\D/g, "");
+}
+
 async function checkBanStatus(number) {
   if (!validNumber(number)) {
     throw new Error("Número inválido. Debe contener solo dígitos.");
@@ -28,8 +32,8 @@ async function checkBanStatus(number) {
 
 function getNumberFromMessage(message, args) {
   const mentionedJid = message.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
-  const mentionedNumber = mentionedJid?.split("@")[0];
-  const textNumber = args.find((arg) => /^\d+$/.test(arg));
+  const mentionedNumber = normalizeNumber(mentionedJid?.split("@")[0]);
+  const textNumber = normalizeNumber(args.join(""));
 
   return textNumber || mentionedNumber || null;
 }
@@ -65,7 +69,7 @@ export default {
   name: ["checkban", "checknum"],
   category: "utils",
   description: "Verifica si un número de WhatsApp está baneado",
-  execute: async (socket, message, args, {prefix}) => {
+  execute: async (socket, message, args, { prefix }) => {
     const remoteJid = message.key.remoteJid;
     const number = getNumberFromMessage(message, args);
 
