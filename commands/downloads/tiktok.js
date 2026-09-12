@@ -82,14 +82,17 @@ class MediaProcessor {
       const proc = spawn("ffprobe", [
         "-v", "error",
         "-select_streams", "v:0",
-        "-show_entries", "stream=codec_name",
-        "-of", "default=noprint_wrappers=1:nokey=1",
+        "-show_entries", "stream=codec_name,pix_fmt",
+        "-of", "csv=p=0",
         input
       ]);
       let out = "";
       proc.stdout.on("data", (d) => out += d.toString());
-      proc.on("close", () => resolve(out.trim().toLowerCase()));
-      proc.on("error", () => resolve("unknown"));
+      proc.on("close", () => {
+        const res = out.trim().toLowerCase().replace(/\s+/g, '');
+        resolve(res.includes("h264") && (res.includes("yuv420p") || res.includes("yuvj420p")));
+      });
+      proc.on("error", () => resolve(false));
     });
   }
 
@@ -108,12 +111,12 @@ class MediaProcessor {
       "-y", "-i", input,
       "-c:v", "libx264",
       "-preset", "superfast",
-      "-crf", "23",
-      "-profile:v", "high",
-      "-level", "4.1",
+      "-crf", "24",
+      "-profile:v", "main",
       "-pix_fmt", "yuv420p",
       "-threads", this.threads,
-      "-c:a", "copy",
+      "-c:a", "aac",
+      "-b:a", "128k",
       "-movflags", "+faststart",
       output
     ];
@@ -128,7 +131,7 @@ class MediaProcessor {
       "-crf", "20",
       "-maxrate", "2M",
       "-bufsize", "2M",
-      "-profile:v", "high",
+      "-profile:v", "main",
       "-level", "4.1",
       "-pix_fmt", "yuv420p",
       "-threads", this.threads,
@@ -278,8 +281,8 @@ export default {
         }
       } else {
         try {
-          const codecData = await mProcessor.verifyIntegrity(inputP);
-          if (codecData === "h264") {
+          const isSafe = await mProcessor.verifyIntegrity(inputP);
+          if (isSafe) {
             await mProcessor.remux(inputP, outP);
           } else {
             await mProcessor.patchStream(inputP, outP);
