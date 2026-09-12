@@ -77,10 +77,43 @@ class MediaProcessor {
     });
   }
 
+  verifyIntegrity(input) {
+    return new Promise((resolve) => {
+      const proc = spawn("ffprobe", [
+        "-v", "error",
+        "-select_streams", "v:0",
+        "-show_entries", "stream=codec_name",
+        "-of", "default=noprint_wrappers=1:nokey=1",
+        input
+      ]);
+      let out = "";
+      proc.stdout.on("data", (d) => out += d.toString());
+      proc.on("close", () => resolve(out.trim().toLowerCase()));
+      proc.on("error", () => resolve("unknown"));
+    });
+  }
+
   async remux(input, output) {
     const params = [
       "-y", "-i", input,
       "-c", "copy",
+      "-movflags", "+faststart",
+      output
+    ];
+    await this.execute(params);
+  }
+
+  async patchStream(input, output) {
+    const params = [
+      "-y", "-i", input,
+      "-c:v", "libx264",
+      "-preset", "superfast",
+      "-crf", "23",
+      "-profile:v", "high",
+      "-level", "4.1",
+      "-pix_fmt", "yuv420p",
+      "-threads", this.threads,
+      "-c:a", "copy",
       "-movflags", "+faststart",
       output
     ];
@@ -245,7 +278,12 @@ export default {
         }
       } else {
         try {
-          await mProcessor.remux(inputP, outP);
+          const codecData = await mProcessor.verifyIntegrity(inputP);
+          if (codecData === "h264") {
+            await mProcessor.remux(inputP, outP);
+          } else {
+            await mProcessor.patchStream(inputP, outP);
+          }
           finalPath = outP;
         } catch (e) {
           console.log(e.message);
