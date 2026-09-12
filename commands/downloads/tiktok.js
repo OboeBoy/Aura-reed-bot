@@ -28,33 +28,15 @@ function validateTikTokUrl(url) {
   return match ? match[0] : null;
 }
 
-// ✨ NUEVA FUNCIÓN: Ping para verificar que el host responda antes de gastar procesos
-async function pingApi() {
-  try {
-    const startTime = Date.now();
-    // Petición ligera de solo 3 segundos de tolerancia
-    await axios.get("https://api.alyacore.xyz", { timeout: 3000 });
-    const pingMs = Date.now() - startTime;
-    return { isAlive: true, ms: pingMs };
-  } catch (error) {
-    // Si da un error HTTP (ej. 404) significa que el servidor SÍ está vivo, solo la ruta no existe.
-    // Si da error de red (timeout, ECONNREFUSED), está completamente muerto.
-    if (error.response) return { isAlive: true, ms: 0 }; 
-    return { isAlive: false, error: error.message };
-  }
-}
-
 async function DL_TIKTOK(input) {
   try {
     let targetUrl = validateTikTokUrl(input);
     const APIKEY = global.Apis.apiAiya.apikey;
 
-    // 1. Fase de Búsqueda (Si no pasaron un enlace directo)
     if (!targetUrl) {
       const alyaUrl = `https://api.alyacore.xyz/search/tiktok?query=${encodeURIComponent(input)}&key=${APIKEY}`;
       const { data: alyaData } = await axios.get(alyaUrl, { timeout: 15000 });
 
-      // Verificamos si la API misma bloqueó la solicitud
       if (!alyaData.status && alyaData.message) {
         throw new Error(`API Error (Búsqueda): ${alyaData.message}`);
       }
@@ -66,7 +48,6 @@ async function DL_TIKTOK(input) {
 
     if (!targetUrl) throw new Error("No se encontró ningún enlace válido para la búsqueda.");
 
-    // 2. Fase de Extracción del Video
     const URL_TIKTOK = `https://api.alyacore.xyz/dl/tiktokv2?url=${encodeURIComponent(targetUrl)}&key=${APIKEY}`;
     const dateCreate = (ts) => new Date(Number(ts) * 1000).toLocaleDateString("es-ES");
 
@@ -78,7 +59,6 @@ async function DL_TIKTOK(input) {
       timeout: 15000,
     });
 
-    // Filtro estricto: Si la API responde OK pero el "status" interno es falso (ej. rate-overlimit)
     if (!data.status && data.message) {
         throw new Error(`API Error (Descarga): ${data.message}`);
     }
@@ -149,22 +129,14 @@ export default {
 
     await socket.sendMessage(remoteJid, { react: { text: "⏳", key: message.key } });
 
-    // ✨ PING PREVENTIVO ANTES DE HACER CUALQUIER OTRA COSA
-    const pingStatus = await pingApi();
-    if (!pingStatus.isAlive) {
-      await socket.sendMessage(remoteJid, { react: { text: "❌", key: message.key } });
-      return await socket.sendMessage(remoteJid, {
-        text: `╭〔 ❌ ${fytBold("AURA REED")} 〕⬣\n┃ ⚠️ ${fytBold("API DESCONECTADA")}\n╰━━━━━━━━━━━━⬣\n\n┃ > El servidor de descargas no responde.\n┃ > Ping fallido: ${pingStatus.error}\n┃ > Intenta nuevamente en unos minutos.\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣`,
-      }, { quoted: message });
-    }
-
     const id = crypto.randomBytes(8).toString("hex");
     const inputP = path.join(tmp, `tt_${id}.mp4`);
     const outP = path.join(tmp, `tt_${id}_out.mp4`);
-    const whatsappReadyPath = path.join(tmp, `tt_${id}_wa.mp4`);
 
     try {
       const result = await DL_TIKTOK(text);
+      
+      // Descarga súper rápida por streams
       await descargarAArchivo(result.video_dl, inputP);
 
       const stats = await fsPromises.stat(inputP);
@@ -179,6 +151,8 @@ export default {
 
       let finalPath = inputP;
 
+      // SOLO procesamos con FFmpeg si de verdad pesa más de 60MB (Lento)
+      // Si pesa menos, pasa directo al envío (Súper Rápido)
       if (sizeMB > 60) {
         await socket.sendMessage(remoteJid, { react: { text: "⚠️", key: message.key } });
         await socket.sendMessage(remoteJid, {
@@ -191,24 +165,6 @@ export default {
         } catch (e) {
           console.error("No se pudo procesar el video, se manda el original:", e.message);
         }
-      }
-
-      // Reempaquetado inteligente
-      try {
-        const { stdout: codecInfo } = await execAsync(
-          `ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 "${finalPath}"`
-        );
-
-        const codec = codecInfo.trim().toLowerCase();
-
-        if (codec === "h264") {
-          await execAsync(`ffmpeg -y -i "${finalPath}" -c copy -movflags +faststart "${whatsappReadyPath}"`, { maxBuffer: 1024 * 1024 * 10 });
-        } else {
-          await execAsync(`ffmpeg -y -i "${finalPath}" -c:v libx264 -preset ultrafast -c:a aac "${whatsappReadyPath}"`, { maxBuffer: 1024 * 1024 * 10 });
-        }
-        finalPath = whatsappReadyPath;
-      } catch (e) {
-        console.error("Reempaquetado fallido:", e.message);
       }
 
       let caption = `╭〔 🎥 ${fytBold("TIKTOK VIDEO")} 〕━⬣\n\n`;
@@ -225,6 +181,7 @@ export default {
       caption += `┃ > ${fytBold("Url")} › ${result.tk_url}\n`;
       caption += `╰〔 ⚡ ${fytBold("SYSTEM ACTIVE")} 〕⬣`;
 
+      // Envío inmediato a Baileys
       await socket.sendMessage(remoteJid, {
         video: { url: finalPath },
         caption: caption,
@@ -244,7 +201,8 @@ export default {
       }, { quoted: message });
 
     } finally {
-      const filesToDelete = [inputP, outP, whatsappReadyPath];
+      // Limpieza sin trabar el bot
+      const filesToDelete = [inputP, outP];
       await Promise.allSettled(
         filesToDelete.map(file => fsPromises.unlink(file).catch(() => {}))
       );
