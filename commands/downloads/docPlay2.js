@@ -3,7 +3,7 @@ import formatter from "../../controllers/functions/formatNumbers.js";
 import { fytBold } from "../../models/TextStyle.js";
 
 const YT_REGEX = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.+$/;
-const LEMPI_API_KEY = "oboe";
+const LEMPI_API_KEY = "OBOE-AERETHIX";
 const LEMPI_QUALITY = 1080;
 const ALYACORE_KEY = "oboe";
 
