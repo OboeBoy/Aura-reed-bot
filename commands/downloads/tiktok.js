@@ -66,17 +66,9 @@ async function DL_TIKTOK(input) {
 
     if (data.status && Array.isArray(data.data) && data.data.length > 0) {
       const r = data;
-      const media =
-        r.data.find((item) => item.type === "nowatermark_hd") ||
-        r.data.find((item) => item.type === "nowatermark") ||
-        r.data.find((item) => item.type === "watermark");
-
-      if (!media?.url) {
-        throw new Error("La respuesta no contiene un enlace de video válido.");
-      }
 
       return {
-        video_dl: media.url,
+        video_dl: r.data[2].url,
         title: r.title || "Video de TikTok",
         authorNick: r.author?.nickname || r.author?.fullname || "Desconocido",
         likes: r.stats?.likes || formatter(r.digg_count || 0),
