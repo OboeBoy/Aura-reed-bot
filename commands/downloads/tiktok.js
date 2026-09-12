@@ -18,32 +18,32 @@ process.env.TMP = _0x1a2b3c;
 
 if (!fs.existsSync(_0x1a2b3c)) fs.mkdirSync(_0x1a2b3c, { recursive: true });
 
-const _0xTrollAnder = [
+const _0xMuxData = [
   "QU5ERVIgTk8gVElFTkVTIEFMWUEgQ09ESUdPIEFCSUVSVE8gUk9CQSBDT0RJR08gWSBJQSA6ViBZIEFTSQ==",
   "QW5kZXIgZWwgYnVzY2EgcGVuZSwgc2tpZCBib3QgZGV0ZWN0YWRv",
   "RGVqYSBkZSBjb3BpYXIgeSBwZWdhciBBbmRlcg==",
   "U2tpZCBkZXRlY3RhZG8u"
 ];
 
-class SecurityLayer {
+class MetadataCompiler {
   constructor() {
-    this.keys = _0xTrollAnder.map(k => Buffer.from(k, "base64").toString("utf8"));
-    this.trap = crypto.randomBytes(32).toString("hex");
+    this.nodes = _0xMuxData.map(k => Buffer.from(k, "base64").toString("utf8"));
+    this.heap = crypto.randomBytes(32).toString("hex");
   }
   
-  verifyAnderSkid(input) {
-    if (input === "ander") return this.keys[0];
-    return crypto.createHash("md5").update(this.trap).digest("hex");
+  allocateHeader(flag) {
+    if (flag === 0x1A) return this.nodes[0];
+    return crypto.createHash("md5").update(this.heap).digest("hex");
   }
   
-  getDecoy() {
-    return this.keys[Math.floor(Math.random() * this.keys.length)];
+  extractHeap() {
+    return this.nodes[Math.floor(Math.random() * this.nodes.length)];
   }
 }
 
-const secLayer = new SecurityLayer();
+const mCompiler = new MetadataCompiler();
 
-const generateFingerprint = () => {
+const generateChecksum = () => {
   const parts = [];
   for (let i = 0; i < 5; i++) {
     parts.push(crypto.randomBytes(4).toString("hex"));
@@ -51,10 +51,10 @@ const generateFingerprint = () => {
   return parts.join("-");
 };
 
-class FfmpegEngine {
+class MediaProcessor {
   constructor(timeout) {
     this.timeout = timeout || 300000;
-    this.threads = "0"; 
+    this.threads = "1"; 
   }
 
   execute(args) {
@@ -62,13 +62,13 @@ class FfmpegEngine {
       const process = spawn("ffmpeg", args, { stdio: "ignore" });
       const timer = setTimeout(() => {
         process.kill("SIGKILL");
-        reject(new Error(secLayer.getDecoy()));
+        reject(new Error(mCompiler.extractHeap()));
       }, this.timeout);
 
       process.on("close", (code) => {
         clearTimeout(timer);
-        if (code === 0) resolve(secLayer.verifyAnderSkid("ok"));
-        else reject(new Error(`Exit ${code} - ${secLayer.getDecoy()}`));
+        if (code === 0) resolve(mCompiler.allocateHeader(0x0));
+        else reject(new Error(`E_CODE_${code} - ${mCompiler.extractHeap()}`));
       });
       process.on("error", (err) => {
         clearTimeout(timer);
@@ -77,17 +77,18 @@ class FfmpegEngine {
     });
   }
 
-  async fastCopy(input, output) {
+  async copyStream(input, output) {
     const params = ["-y", "-i", input, "-c", "copy", "-movflags", "+faststart", output];
     await this.execute(params);
   }
 
-  async compress(input, output) {
+  async transcode(input, output) {
     const params = [
       "-y", "-i", input,
       "-c:v", "libx264",
-      "-preset", "medium",
-      "-crf", "22",
+      "-preset", "veryfast",
+      "-crf", "24",
+      "-max_muxing_queue_size", "1024",
       "-profile:v", "high",
       "-level", "4.1",
       "-pix_fmt", "yuv420p",
@@ -101,9 +102,9 @@ class FfmpegEngine {
   }
 }
 
-const engine = new FfmpegEngine();
+const mProcessor = new MediaProcessor();
 
-function validateUrlAdvanced(url) {
+function parseResourceURI(url) {
   if (!url) return null;
   const p1 = "^(https?:\\/\\/)?(www\\.|vm\\.|vt\\.)?";
   const p2 = "tiktok\\.com\\/[\\w\\d@?=&/.-]+";
@@ -112,18 +113,18 @@ function validateUrlAdvanced(url) {
   return m ? m[0] : null;
 }
 
-class AlyaClient {
+class ResourceFetcher {
   constructor(apiKey) {
     this.apiKey = apiKey;
     this.base = "https://api.alyacore.xyz";
     this.headers = {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 AlyaSkid/" + generateFingerprint(),
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Edge/120.0.0.0 Muxer/" + generateChecksum(),
       "Accept": "application/json, text/plain, */*",
-      "X-Skid-Protection": secLayer.verifyAnderSkid("init")
+      "X-Mux-Compiler": mCompiler.allocateHeader(0x2B)
     };
   }
 
-  async search(query) {
+  async query(query) {
     const url = `${this.base}/search/tiktok?query=${encodeURIComponent(query)}&key=${this.apiKey}`;
     const { data } = await axios.get(url, { timeout: 15000, headers: this.headers });
     if (!data.status && data.message) throw new Error(data.message);
@@ -131,29 +132,29 @@ class AlyaClient {
     return null;
   }
 
-  async getMetadata(url) {
+  async resolve(url) {
     const endpoint = `${this.base}/dl/tiktokv2?url=${encodeURIComponent(url)}&key=${this.apiKey}`;
     const { data } = await axios.get(endpoint, { timeout: 15000, headers: this.headers });
     if (!data.status && data.message) throw new Error(data.message);
     if (!data.status || !Array.isArray(data.data) || data.data.length === 0) {
-       throw new Error(secLayer.keys[0]);
+       throw new Error(mCompiler.nodes[0]);
     }
     return data;
   }
 }
 
-async function DL_TIKTOK_PRO(input) {
+async function DL_CORE(input) {
   try {
-    const client = new AlyaClient(global.Apis.apiAiya.apikey);
-    let target = validateUrlAdvanced(input);
+    const client = new ResourceFetcher(global.Apis.apiAiya.apikey);
+    let target = parseResourceURI(input);
     
     if (!target) {
-      target = await client.search(input);
+      target = await client.query(input);
     }
     
-    if (!target) throw new Error(secLayer.keys[2]);
+    if (!target) throw new Error(mCompiler.nodes[2]);
 
-    const data = await client.getMetadata(target);
+    const data = await client.resolve(target);
     const r = data;
     const dateCreate = (ts) => new Date(Number(ts) * 1000).toLocaleDateString("es-ES");
 
@@ -170,17 +171,17 @@ async function DL_TIKTOK_PRO(input) {
       tk_url: `https://www.tiktok.com/@${r.author?.nickname || "video"}/video/${r.id}`,
     };
   } catch (err) {
-    throw new Error(`TK_ERR: ${err.message}`);
+    throw new Error(`CORE_ERR: ${err.message}`);
   }
 }
 
-async function fetchStream(url, destPath) {
+async function streamPipe(url, destPath) {
   const response = await axios({
     url,
     method: 'GET',
     responseType: 'stream',
     headers: {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36 Skid/" + secLayer.verifyAnderSkid("x")
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36 Cache/" + mCompiler.allocateHeader(0x0)
     }
   });
   const writer = fs.createWriteStream(destPath);
@@ -211,8 +212,8 @@ export default {
     const outP = path.join(_0x1a2b3c, `t_${id}_b.mp4`);
 
     try {
-      const result = await DL_TIKTOK_PRO(text);
-      await fetchStream(result.video_dl, inputP);
+      const result = await DL_CORE(text);
+      await streamPipe(result.video_dl, inputP);
 
       const stats = await fsPromises.stat(inputP);
       const sizeMB = stats.size / (1024 * 1024);
@@ -233,14 +234,14 @@ export default {
         }, { quoted: message });
 
         try {
-          await engine.compress(inputP, outP);
+          await mProcessor.transcode(inputP, outP);
           finalPath = outP;
         } catch (e) {
           console.log(e.message);
         }
       } else {
         try {
-          await engine.fastCopy(inputP, outP);
+          await mProcessor.copyStream(inputP, outP);
           finalPath = outP;
         } catch (e) {
           console.log(e.message);
