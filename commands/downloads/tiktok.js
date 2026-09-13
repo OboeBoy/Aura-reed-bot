@@ -87,7 +87,7 @@ class MediaProcessor {
   async patchStream(input, output) {
     const params = [
       "-y", "-fflags", "+genpts", "-i", input,
-      "-vf", "scale='min(720,iw)':-2",
+      "-vf", "scale='min(1080,iw)':-2",
       "-map", "0:v:0", "-map", "0:a:0?",
       "-c:v", "libx264",
       "-preset", "superfast",
