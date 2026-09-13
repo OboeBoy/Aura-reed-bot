@@ -105,7 +105,7 @@ async function fastDownload(url, destPath) {
       method: "GET",
       url: url,
       responseType: "stream",
-      timeout: 35000,
+      timeout: 60000,
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Referer": "https://www.tiktok.com/"
@@ -117,7 +117,7 @@ async function fastDownload(url, destPath) {
   }
 }
 
-const MAX_INPUT_MB = 250;
+const MAX_INPUT_MB = 600;
 const RAW_LIMIT_MB = 60;
 
 export default {
@@ -162,9 +162,8 @@ export default {
       let pathToSend = inputPath;
 
       if (initialSizeMB > RAW_LIMIT_MB) {
-        // Videos pesados: Compresión mínima imperceptible orientada a tasa de bits original
         isCompressed = true;
-        await socket.sendMessage(remoteJid, { text: `> ⚡ Optimizando tamaño (${initialSizeMB.toFixed(1)}MB)...`, react: { text: "🔥", key: message.key } });
+        await socket.sendMessage(remoteJid, { text: `> ⚡ Exprime la GPU (${initialSizeMB.toFixed(1)}MB)...`, react: { text: "🔥", key: message.key } });
 
         let originalBitrate = 0;
         try {
@@ -172,18 +171,17 @@ export default {
           originalBitrate = parseInt(stdout.trim(), 10);
         } catch (e) {}
 
-        const targetBitrate = originalBitrate > 0 ? Math.floor(originalBitrate * 0.95) : 0;
-        const bitrateArg = targetBitrate > 0 ? `-b:v ${targetBitrate} -maxrate ${Math.floor(targetBitrate * 1.05)} -bufsize ${Math.floor(targetBitrate * 1.5)}` : `-crf 18`;
+        const targetBitrate = originalBitrate > 0 ? Math.floor(originalBitrate * 0.96) : 0;
+        const bitrateArg = targetBitrate > 0 ? `-b:v ${targetBitrate} -maxrate ${Math.floor(targetBitrate * 1.05)} -bufsize ${Math.floor(targetBitrate * 1.5)}` : `-crf 17`;
 
-        const renderCmd = `ffmpeg -y -i "${inputPath}" -threads 2 -c:v libx264 -pix_fmt yuv420p -preset fast ${bitrateArg} -c:a copy -movflags +faststart "${finalPath}"`;
-        await execAsync(renderCmd, { timeout: 120000 });
+        const renderCmd = `ffmpeg -y -i "${inputPath}" -threads 4 -c:v libx264 -pix_fmt yuv420p -preset fast ${bitrateArg} -c:a copy -movflags +faststart "${finalPath}"`;
+        await execAsync(renderCmd, { timeout: 240000 });
 
         if (fs.existsSync(finalPath) && fs.statSync(finalPath).size > 1024) {
           pathToSend = finalPath;
           finalSizeMB = fs.statSync(finalPath).size / (1024 * 1024);
         }
       } else {
-        // Videos menores a 60MB: Copia directa de streams (CRURO/RAW) pero arreglando metadatos para Baileys
         try {
           const fixCmd = `ffmpeg -y -i "${inputPath}" -c copy -movflags +faststart "${finalPath}"`;
           await execAsync(fixCmd, { timeout: 30000 });
@@ -191,7 +189,6 @@ export default {
             pathToSend = finalPath;
           }
         } catch (e) {
-          // Si falla el reempaquetado rápido, usamos el archivo original tal cual
           pathToSend = inputPath;
         }
       }
@@ -200,7 +197,7 @@ export default {
 
       const shortDesc = result.title.length > 40 ? result.title.substring(0, 40) + "..." : result.title;
       const weightInfo = isCompressed 
-        ? `(${initialSizeMB.toFixed(1)}MB ➔ ${finalSizeMB.toFixed(1)}MB) [HQ-COMPRESS]` 
+        ? `(${initialSizeMB.toFixed(1)}MB ➔ ${finalSizeMB.toFixed(1)}MB) [GPU-HQ]` 
         : `(${initialSizeMB.toFixed(1)}MB) [RAW ORIGINAL]`;
 
       let caption = `╭〔 🎥 ${fytBold("TIKTOK")} 〕⬣\n`;
