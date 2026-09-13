@@ -8,7 +8,7 @@ import fs from "fs";
 import crypto from "crypto";
 import formatter from "../../controllers/functions/formatNumbers.js";
 import { fytBold } from "../../models/TextStyle.js";
-import { TikTokClient } from "../../src/libs/tiktok-api";
+import { TikTokClient } from "../../src/libs/tiktok-api/index.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const customTemp = path.join(__dirname, "../../tmp");
@@ -77,9 +77,7 @@ async function resolveTiktokUrl(rawText) {
       if (alyaData.status && Array.isArray(alyaData.data) && alyaData.data.length > 0) {
         return alyaData.data[0].url;
       }
-    } catch (e) {
-      console.error("Alya search fallback error:", e.message);
-    }
+    } catch (e) {}
   }
 
   const search = await tiktokClient.search(rawText, { resultLimit: 1 });
@@ -98,7 +96,7 @@ async function DL_TIKTOK(input) {
     const download = await tiktokClient.downloadVideo(targetUrl);
 
     if (download.status !== "success" || !download.result) {
-      throw new Error(download.message || "No se pudieron extraer los datos del video con TikTokClient.");
+      throw new Error(download.message || "No se pudieron extraer los datos del video.");
     }
 
     const r = download.result;
@@ -235,10 +233,6 @@ export default {
           await processVideoFile(inputP, outP);
           finalPath = outP;
         } catch (e) {
-          console.error(
-            "No se pudo procesar el video, se manda el original:",
-            e.message,
-          );
           finalPath = inputP;
         }
       }
@@ -263,9 +257,7 @@ export default {
         }
 
         finalPath = whatsappReadyPath;
-      } catch (e) {
-        console.error("Reempaquetado fallido:", e.message);
-      }
+      } catch (e) {}
 
       let caption = `╭〔 🎥 ${fytBold("TIKTOK VIDEO")} 〕━⬣\n\n`;
       caption += `┃ ➥ ${fytBold(result.title)}\n\n`;
@@ -300,14 +292,12 @@ export default {
         react: { text: "✅", key: message.key },
       });
     } catch (error) {
-      console.error("Error detallado en tiktok:", error);
       await socket.sendMessage(remoteJid, {
         react: { text: "❌", key: message.key },
       });
 
       const errorMsg =
         error.message ||
-        JSON.stringify(error) ||
         "Ocurrió un error inesperado.";
 
       await socket.sendMessage(
