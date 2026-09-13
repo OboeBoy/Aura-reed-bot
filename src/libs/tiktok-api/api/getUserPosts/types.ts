@@ -1,8 +1,10 @@
-export enum PostItemRequestType {
-  Latest = 0,
-  Popular = 1,
-  Oldest = 2,
-}
+export const PostItemRequestType = {
+  Latest: 0,
+  Popular: 1,
+  Oldest: 2,
+};
+
+export type PostItemRequestType = number;
 
 export interface TiktokUserPostsAPIResponse {
   cursor: string;
@@ -347,7 +349,6 @@ export interface ImageAsset {
   };
 }
 
-// Backward compatible alias for previous "Posts" type
 export type Posts = TiktokPostItem;
 
 export type TiktokUserPostsResponse = {
