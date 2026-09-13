@@ -15,17 +15,18 @@ export default {
     initText += `┃ ⚙️ ${fytBold("SISTEMA UPDATE")}\n`;
     initText += `╰━━━━━━━━━━━━⬣\n\n`;
     initText += `┃ > Buscando actualizaciones\n`;
-    initText += `┃ > en el repositorio...\n\n`;
+    initText += `┃ > en la rama Termux...\n\n`;
     initText += `╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣`;
 
-    // Guardamos la referencia del mensaje inicial para editarlo después
     const initMsg = await socket.sendMessage(
       remoteJid,
       { text: initText },
-      { quoted: message },
+      { quoted: message }
     );
 
-    exec("git reset --hard && git pull", async (err, stdout, stderr) => {
+    const updateCmd = "git fetch origin Termux && git reset --hard origin/Termux && npm install --no-audit";
+
+    exec(updateCmd, async (err, stdout, stderr) => {
       if (err) {
         let textErr = `╭〔 ❌ ${fytBold("AURA REED")} 〕⬣\n`;
         textErr += `┃ ⚠️ ${fytBold("ERROR DE UPDATE")}\n`;
@@ -40,12 +41,12 @@ export default {
         });
       }
 
-      if (stdout.includes("Already up to date")) {
+      if (stdout.includes("HEAD is now at") && stdout.includes("up to date")) {
         let textUp = `╭〔 ✅ ${fytBold("AURA REED")} 〕⬣\n`;
         textUp += `┃ ✨ ${fytBold("SISTEMA UPDATE")}\n`;
         textUp += `╰━━━━━━━━━━━━⬣\n\n`;
         textUp += `┃ > El bot ya se encuentra\n`;
-        textUp += `┃ > en su versión más reciente.\n\n`;
+        textUp += `┃ > en su versión más reciente (Termux).\n\n`;
         textUp += `╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣`;
 
         return await socket.sendMessage(remoteJid, {
@@ -54,14 +55,14 @@ export default {
         });
       }
 
-      // Formatear los cambios de Git de forma limpia
       let textSuccess = `╭〔 ✅ ${fytBold("AURA REED")} 〕⬣\n`;
       textSuccess += `┃ 🚀 ${fytBold("UPDATE COMPLETO")}\n`;
       textSuccess += `╰━━━━━━━━━━━━⬣\n\n`;
-      textSuccess += `┃ > Actualización exitosa.\n`;
+      textSuccess += `┃ > Rama: Termux\n`;
+      textSuccess += `┃ > Parches y dependencias verificados.\n`;
       textSuccess += `┃ > Reinicie el bot para aplicar.\n\n`;
-      textSuccess += `┣ 📝 ${fytBold("CAMBIOS DETECTADOS:")}\n`;
-      textSuccess += `\`\`\`\n${stdout.trim()}\n\`\`\`\n\n`;
+      textSuccess += `┣ 📝 ${fytBold("SALIDA DEL SISTEMA:")}\n`;
+      textSuccess += `\`\`\`\n${stdout.slice(0, 1000).trim()}\n\`\`\`\n\n`;
       textSuccess += `╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣`;
 
       await socket.sendMessage(remoteJid, {
