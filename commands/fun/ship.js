@@ -36,43 +36,44 @@ function drawCircleAvatar(ctx, img, x, y, size) {
 }
 
 function drawHeart(ctx, centerX, centerY, size, fill, stroke, lineWidth) {
-  const half = size / 2;
-  const top = centerY - size * 0.28;
+  const top = centerY - size * 0.45;
+  const bottom = centerY + size * 0.55;
+  const lobe = size * 0.42;
 
   ctx.save();
   ctx.beginPath();
-  ctx.moveTo(centerX, centerY + half);
+  ctx.moveTo(centerX, centerY - size * 0.08);
   ctx.bezierCurveTo(
-    centerX - half * 1.35,
-    centerY - size * 0.12,
-    centerX - half * 0.95,
-    top - size * 0.38,
-    centerX - half * 0.38,
+    centerX - size * 0.16,
+    centerY - size * 0.36,
+    centerX - lobe,
     top,
+    centerX - lobe,
+    centerY - size * 0.05,
   );
   ctx.bezierCurveTo(
-    centerX - half * 0.08,
-    top - size * 0.2,
+    centerX - lobe,
+    centerY + size * 0.28,
+    centerX - size * 0.2,
+    centerY + size * 0.42,
     centerX,
-    top,
-    centerX,
-    top + size * 0.2,
+    bottom,
   );
   ctx.bezierCurveTo(
-    centerX,
-    top,
-    centerX + half * 0.08,
-    top - size * 0.2,
-    centerX + half * 0.38,
-    top,
+    centerX + size * 0.2,
+    centerY + size * 0.42,
+    centerX + lobe,
+    centerY + size * 0.28,
+    centerX + lobe,
+    centerY - size * 0.05,
   );
   ctx.bezierCurveTo(
-    centerX + half * 0.95,
-    top - size * 0.38,
-    centerX + half * 1.35,
-    centerY - size * 0.12,
+    centerX + lobe,
+    top,
+    centerX + size * 0.16,
+    centerY - size * 0.36,
     centerX,
-    centerY + half,
+    centerY - size * 0.08,
   );
   ctx.closePath();
   ctx.fillStyle = fill;
