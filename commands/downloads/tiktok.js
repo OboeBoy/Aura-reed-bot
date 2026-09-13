@@ -82,7 +82,7 @@ class MediaProcessor {
       const proc = spawn("ffprobe", [
         "-v", "error",
         "-select_streams", "v:0",
-        "-show_entries", "stream=codec_name,pix_fmt",
+        "-show_entries", "stream=codec_name,pix_fmt,level",
         "-of", "csv=p=0",
         input
       ]);
@@ -90,7 +90,10 @@ class MediaProcessor {
       proc.stdout.on("data", (d) => out += d.toString());
       proc.on("close", () => {
         const res = out.trim().toLowerCase().replace(/\s+/g, '');
-        resolve(res.includes("h264") && (res.includes("yuv420p") || res.includes("yuvj420p")));
+        const isH264 = res.includes("h264");
+        const isSafeColor = res.includes("yuv420p") || res.includes("yuvj420p");
+        const isSafeLevel = !res.includes("50") && !res.includes("51") && !res.includes("52");
+        resolve(isH264 && isSafeColor && isSafeLevel);
       });
       proc.on("error", () => resolve(false));
     });
@@ -109,9 +112,12 @@ class MediaProcessor {
   async patchStream(input, output) {
     const params = [
       "-y", "-i", input,
+      "-vf", "scale='min(720,iw)':-2",
       "-c:v", "libx264",
       "-preset", "superfast",
       "-crf", "24",
+      "-profile:v", "main",
+      "-level", "4.1",
       "-pix_fmt", "yuv420p",
       "-threads", this.threads,
       "-c:a", "aac",
@@ -125,12 +131,14 @@ class MediaProcessor {
   async transcode(input, output) {
     const params = [
       "-y", "-i", input,
-      "-vf", "scale='min(1080,iw)':-2",
+      "-vf", "scale='min(720,iw)':-2",
       "-c:v", "libx264",
       "-preset", "fast",
-      "-crf", "22",
-      "-maxrate", "4M",
-      "-bufsize", "4M",
+      "-crf", "24",
+      "-maxrate", "3M",
+      "-bufsize", "3M",
+      "-profile:v", "main",
+      "-level", "4.1",
       "-pix_fmt", "yuv420p",
       "-threads", this.threads,
       "-c:a", "aac",
@@ -275,7 +283,12 @@ export default {
           await mProcessor.transcode(inputP, outP);
           finalPath = outP;
         } catch (e) {
-          console.log(e.message);
+          try {
+            await mProcessor.remux(inputP, outP);
+            finalPath = outP;
+          } catch (err) {
+            console.log(err.message);
+          }
         }
       } else {
         try {
