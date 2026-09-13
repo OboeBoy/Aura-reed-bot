@@ -77,7 +77,7 @@ class MediaProcessor {
 
           const isH264 = codec === "h264";
           const isSafeColor = pixFmt.includes("yuv420p") || pixFmt.includes("yuvj420p");
-          const isSafeLevel = level <= 41;
+          const isSafeLevel = level <= 40;
 
           resolve({ safe: isH264 && isSafeColor && isSafeLevel, duration });
         } catch (e) {
@@ -109,7 +109,7 @@ class MediaProcessor {
       "-preset", "superfast",
       "-crf", "24",
       "-profile:v", "main",
-      "-level", "4.1",
+      "-level", "4.0",
       "-pix_fmt", "yuv420p",
       "-threads", this.threads,
       "-c:a", "aac",
@@ -129,10 +129,10 @@ class MediaProcessor {
       "-c:v", "libx264",
       "-preset", "fast",
       "-crf", "24",
-      "-maxrate", "3M",
-      "-bufsize", "3M",
+      "-maxrate", "2.5M",
+      "-bufsize", "2.5M",
       "-profile:v", "main",
-      "-level", "4.1",
+      "-level", "4.0",
       "-pix_fmt", "yuv420p",
       "-threads", this.threads,
       "-c:a", "aac",
