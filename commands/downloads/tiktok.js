@@ -28,6 +28,7 @@ function validateTikTokUrl(url) {
 class MediaProcessor {
   constructor(timeout) {
     this.timeout = timeout || 300000;
+    this.threads = "1";
   }
 
   execute(args) {
@@ -55,6 +56,27 @@ class MediaProcessor {
       "-y", "-fflags", "+genpts", "-i", input,
       "-map", "0:v:0", "-map", "0:a:0?",
       "-c", "copy",
+      "-movflags", "+faststart",
+      output
+    ];
+    await this.execute(params);
+  }
+
+  async transcode(input, output) {
+    const params = [
+      "-y", "-fflags", "+genpts", "-i", input,
+      "-vf", "scale='min(1080,iw)':-2",
+      "-map", "0:v:0", "-map", "0:a:0?",
+      "-c:v", "libx264",
+      "-preset", "veryfast",
+      "-crf", "19",
+      "-profile:v", "main",
+      "-level", "4.0",
+      "-pix_fmt", "yuv420p",
+      "-threads", this.threads,
+      "-max_muxing_queue_size", "1024",
+      "-c:a", "aac",
+      "-b:a", "192k",
       "-movflags", "+faststart",
       output
     ];
@@ -171,8 +193,25 @@ export default {
         }, { quoted: message });
       }
 
-      await mediaProcessor.rawRemux(inputP, outP);
-      let finalPath = outP;
+      let finalPath = inputP;
+
+      if (sizeMB > 60) {
+        socket.sendMessage(remoteJid, { react: { text: "⚠️", key: message.key } }).catch(() => {});
+        await socket.sendMessage(remoteJid, {
+          text: `¡Uy mae! Este video pesa mucho, lo estoy optimizando sin perder calidad...\nDame chance.`,
+        }, { quoted: message });
+
+        try {
+          await mediaProcessor.transcode(inputP, outP);
+          finalPath = outP;
+        } catch (e) {
+          await mediaProcessor.rawRemux(inputP, outP);
+          finalPath = outP;
+        }
+      } else {
+        await mediaProcessor.rawRemux(inputP, outP);
+        finalPath = outP;
+      }
 
       let caption = `╭〔 🎥 ${fytBold("TIKTOK VIDEO")} 〕━⬣\n\n`;
       caption += `┃ ➥ ${fytBold(result.title)}\n\n`;
