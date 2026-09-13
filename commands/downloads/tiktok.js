@@ -51,92 +51,21 @@ class MediaProcessor {
     });
   }
 
-  verifyIntegrity(input) {
-    return new Promise((resolve) => {
-      const proc = spawn("ffprobe", [
-        "-v", "error",
-        "-select_streams", "v:0",
-        "-show_entries", "stream=codec_name,pix_fmt,level,duration",
-        "-of", "json",
-        input
-      ]);
-      let out = "";
-      proc.stdout.on("data", (d) => out += d.toString());
-      proc.on("close", () => {
-        try {
-          const parsed = JSON.parse(out);
-          const stream = parsed.streams && parsed.streams[0];
-          if (!stream) {
-            resolve({ safe: false, duration: 0 });
-            return;
-          }
-          const codec = (stream.codec_name || "").toLowerCase();
-          const pixFmt = (stream.pix_fmt || "").toLowerCase();
-          const level = Number(stream.level || 30);
-          const duration = parseFloat(stream.duration || 0);
-
-          const isH264 = codec === "h264";
-          const isSafeColor = pixFmt.includes("yuv420p") || pixFmt.includes("yuvj420p");
-          const isSafeLevel = level <= 40;
-
-          resolve({ safe: isH264 && isSafeColor && isSafeLevel, duration });
-        } catch (e) {
-          resolve({ safe: false, duration: 0 });
-        }
-      });
-      proc.on("error", () => resolve({ safe: false, duration: 0 }));
-    });
-  }
-
-  async remuxClean(input, output, duration) {
-    const params = [
-      "-y", "-fflags", "+genpts", "-i", input,
-      "-map", "0:v:0", "-map", "0:a:0?",
-      "-c", "copy",
-      ...(duration > 0 ? ["-t", String(duration)] : []),
-      "-movflags", "+faststart",
-      output
-    ];
-    await this.execute(params);
-  }
-
-  async patchStream(input, output) {
-    const params = [
-      "-y", "-fflags", "+genpts", "-i", input,
-      "-vf", "scale='min(720,iw)':-2",
-      "-map", "0:v:0", "-map", "0:a:0?",
-      "-c:v", "libx264",
-      "-preset", "superfast",
-      "-crf", "24",
-      "-profile:v", "main",
-      "-level", "4.0",
-      "-pix_fmt", "yuv420p",
-      "-threads", this.threads,
-      "-c:a", "aac",
-      "-b:a", "128k",
-      "-shortest",
-      "-movflags", "+faststart",
-      output
-    ];
-    await this.execute(params);
-  }
-
-  async transcode(input, output) {
+  async forceProcess(input, output) {
     const params = [
       "-y", "-fflags", "+genpts", "-i", input,
       "-vf", "scale='min(720,iw)':-2",
       "-map", "0:v:0", "-map", "0:a:0?",
       "-c:v", "libx264",
       "-preset", "fast",
-      "-crf", "24",
-      "-maxrate", "2.5M",
-      "-bufsize", "2.5M",
+      "-crf", "23",
       "-profile:v", "main",
       "-level", "4.0",
       "-pix_fmt", "yuv420p",
       "-threads", this.threads,
       "-c:a", "aac",
       "-b:a", "128k",
+      "-ar", "44100",
       "-shortest",
       "-movflags", "+faststart",
       output
@@ -254,44 +183,13 @@ export default {
         }, { quoted: message });
       }
 
-      let finalPath = inputP;
+      socket.sendMessage(remoteJid, { react: { text: "⚠️", key: message.key } }).catch(() => {});
+      await socket.sendMessage(remoteJid, {
+        text: `Procesando video para asegurar compatibilidad total con WhatsApp...\nDame chance.`,
+      }, { quoted: message });
 
-      if (sizeMB > 60) {
-        socket.sendMessage(remoteJid, { react: { text: "⚠️", key: message.key } }).catch(() => {});
-        await socket.sendMessage(remoteJid, {
-          text: `¡Uy mae! Este video pesa mucho, lo estoy optimizando sin perder calidad...\nDame chance.`,
-        }, { quoted: message });
-
-        try {
-          await mediaProcessor.transcode(inputP, outP);
-          finalPath = outP;
-        } catch (e) {
-          try {
-            await mediaProcessor.patchStream(inputP, outP);
-            finalPath = outP;
-          } catch (err) {
-            console.log(err.message);
-          }
-        }
-      } else {
-        try {
-          const integrity = await mediaProcessor.verifyIntegrity(inputP);
-          if (integrity.safe) {
-            await mediaProcessor.remuxClean(inputP, outP, integrity.duration);
-            finalPath = outP;
-          } else {
-            await mediaProcessor.patchStream(inputP, outP);
-            finalPath = outP;
-          }
-        } catch (e) {
-          try {
-            await mediaProcessor.patchStream(inputP, outP);
-            finalPath = outP;
-          } catch (err) {
-            console.log(err.message);
-          }
-        }
-      }
+      await mediaProcessor.forceProcess(inputP, outP);
+      let finalPath = outP;
 
       let caption = `╭〔 🎥 ${fytBold("TIKTOK VIDEO")} 〕━⬣\n\n`;
       caption += `┃ ➥ ${fytBold(result.title)}\n\n`;
