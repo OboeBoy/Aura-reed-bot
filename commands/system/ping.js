@@ -1,9 +1,5 @@
 import fs from "fs";
-import { exec } from "child_process";
-import { promisify } from "util";
 import { fytBold } from "../../models/TextStyle.js";
-
-const execAsync = promisify(exec);
 
 function getMemoryInfo() {
   try {
@@ -52,30 +48,22 @@ function getMemoryInfo() {
 
 export default {
   name: ["ping", "p", "lat"],
-  description: "Velocidad de red y red hacia Cloudflare.",
+  description: "Velocidad de procesamiento interno del bot.",
   category: "system",
 
   async execute(sock, m, args) {
     const start = performance.now();
 
+    
     const { key } = await sock.sendMessage(
       m.key.remoteJid,
       {
-        text: `⚡ ${fytBold("CALCULANDO LATENCIA")} ⚡\n\n╭━━〔 ${fytBold("AURA REED SYSTEM")} 〕━━⬣\n┃ 🚀 Midiendo red (Cloudflare)...\n┃ 📡 Analizando socket\n╰━━━━━━━━━━━━━━━━⬣\n`,
+        text: `⚡ ${fytBold("CALCULANDO VELOCIDAD")} ⚡\n\n╭━━〔 ${fytBold("AURA REED SYSTEM")} 〕━━⬣\n┃ ⚙️ Midiendo procesamiento...\n╰━━━━━━━━━━━━━━━━⬣\n`,
       },
       { quoted: m },
     );
 
-    let cfPing = 0;
-    try {
-      const { stdout } = await execAsync("ping -c 1 -W 2 1.1.1.1", { timeout: 3000 });
-      const match = stdout.match(/time=([\d.]+)\s*ms/);
-      if (match && match[1]) {
-        cfPing = Math.round(parseFloat(match[1]));
-      }
-    } catch (e) {
-      cfPing = Math.round(performance.now() - start);
-    }
+    const processTime = Math.round(performance.now() - start);
 
     const memory = getMemoryInfo();
     const usedRAM = memory.used;
@@ -93,24 +81,21 @@ export default {
 
     let status = "";
     let system = "";
-    if (cfPing < 50) {
-      status = "🟢 Ultra Rápido";
+    if (processTime < 50) {
+      status = "🟢 Instantáneo";
       system = "Estable";
-    } else if (cfPing < 150) {
+    } else if (processTime < 150) {
       status = "🟢 Excelente";
       system = "Estable";
-    } else if (cfPing < 300) {
-      status = "🟠 Aceptable";
-      system = "Normal";
     } else {
-      status = "🔴 Malo";
-      system = "En problemas";
+      status = "🟠 Normal";
+      system = "Estable";
     }
 
     await sock.sendMessage(
       m.key.remoteJid,
       {
-        text: `⚡ ${fytBold("RESULTADO DE LA PRUEBA")} ⚡\n\n╭━━〔 ${fytBold("AURA REED SYSTEM")} 〕━━⬣\n┃ 🌐 ${fytBold("Latencia:")} *${cfPing}ms*\n┃ 📶 ${fytBold("Estado:")} *${status}*\n┃ 📊 ${fytBold("Estado RAM:")} ${ramStatus}\n┃ 🔥 ${fytBold("Sistema:")} *${system}*\n╰━━━━━━━━━━━━━━━━⬣`,
+        text: `⚡ ${fytBold("RESULTADO DE LA PRUEBA")} ⚡\n\n╭━━〔 ${fytBold("AURA REED SYSTEM")} 〕━━⬣\n┃ ⚡ ${fytBold("Velocidad Bot:")} *${processTime}ms*\n┃ 📶 ${fytBold("Estado:")} *${status}*\n┃ 📊 ${fytBold("Estado RAM:")} ${ramStatus}\n┃ 🔥 ${fytBold("Sistema:")} *${system}*\n╰━━━━━━━━━━━━━━━━⬣`,
         edit: key,
       },
       { quoted: m },
