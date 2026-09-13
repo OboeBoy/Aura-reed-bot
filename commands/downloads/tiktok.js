@@ -77,7 +77,7 @@ async function DL_TIKTOK(input) {
         collect: r.stats?.download || formatter(r.collect_count || 0),
         comments: r.stats?.comment || formatter(r.comment_count || 0),
         time: r.taken_at || dateCreate(r.create_time || 0),
-        tk_url: `https://www.tiktok.com/@${r.author?.nickname}/video/${r.id}`,
+        tk_url: `https://www.tiktok.com/@${r.author?.fullname}/video/${r.id}`,
       };
     }
     throw new Error("No se pudieron extraer los datos del video con TikWM.");
