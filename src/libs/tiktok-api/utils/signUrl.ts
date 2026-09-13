@@ -1,5 +1,5 @@
-import signBogus from './xbogus';
-import signGnarly from './xgnarly';
+import signBogus from './xbogus.ts';
+import signGnarly from './xgnarly.ts';
 
 type SignUrlParams = {
   url: string;
@@ -8,11 +8,6 @@ type SignUrlParams = {
   userAgent: string;
 };
 
-/**
- * Sign TikTok API URL with X-Bogus and X-Gnarly parameters
- * @param data - URL, params, body, and user agent
- * @returns Signed URL with X-Bogus and X-Gnarly parameters
- */
 export function signUrl(data: SignUrlParams): string {
   const queryString = new URLSearchParams(data.params).toString();
 
