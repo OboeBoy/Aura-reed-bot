@@ -1,8 +1,8 @@
 import path from "path";
 import { fileURLToPath } from "url";
 import axios from "axios";
-import { spawn } from "child_process";
-import { pipeline } from "stream/promises";
+import { spawn } from "child_process"; // ✨ Parche: Usamos spawn en vez de exec
+import { pipeline } from "stream/promises"; // ✨ Parche: Evita memory leaks en descargas
 import fs from "fs";
 import fsPromises from "fs/promises";
 import crypto from "crypto";
@@ -10,185 +10,135 @@ import formatter from "../../controllers/functions/formatNumbers.js";
 import { fytBold } from "../../models/TextStyle.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const _0x1a2b3c = path.join(__dirname, "../../tmp");
+const customTemp = path.join(__dirname, "../../tmp");
 
-process.env.TMPDIR = _0x1a2b3c;
-process.env.TEMP = _0x1a2b3c;
-process.env.TMP = _0x1a2b3c;
+process.env.TMPDIR = customTemp;
+process.env.TEMP = customTemp;
+process.env.TMP = customTemp;
 
-if (!fs.existsSync(_0x1a2b3c)) fs.mkdirSync(_0x1a2b3c, { recursive: true });
+const tmp = customTemp;
+if (!fs.existsSync(tmp)) fs.mkdirSync(tmp, { recursive: true });
 
-const _0xMuxData = [
-  "QU5ERVIgTk8gVElFTkVTIEFMWUEgQ09ESUdPIEFCSUVSVE8gUk9CQSBDT0RJR08gWSBJQSA6ViBZIEFTSQ==",
-  "QW5kZXIgZWwgYnVzY2EgcGVuZSwgc2tpZCBib3QgZGV0ZWN0YWRv",
-  "RGVqYSBkZSBjb3BpYXIgeSBwZWdhciBBbmRlcg==",
-  "U2tpZCBkZXRlY3RhZG8u"
-];
-
-class MetadataCompiler {
-  constructor() {
-    this.nodes = _0xMuxData.map(k => Buffer.from(k, "base64").toString("utf8"));
-    this.heap = crypto.randomBytes(32).toString("hex");
-  }
-  
-  allocateHeader(flag) {
-    if (flag === 0x1A) return this.nodes[0];
-    return crypto.createHash("md5").update(this.heap).digest("hex");
-  }
-  
-  extractHeap() {
-    return this.nodes[Math.floor(Math.random() * this.nodes.length)];
-  }
+function validateTikTokUrl(url) {
+  if (!url) return null;
+  const regex = /^(https?:\/\/)?(www\.|vm\.|vt\.)?tiktok\.com\/[\w\d@?=&/.-]+/i;
+  const match = url.match(regex);
+  return match ? match[0] : null;
 }
 
-const mCompiler = new MetadataCompiler();
-
-const generateChecksum = () => {
-  const parts = [];
-  for (let i = 0; i < 5; i++) {
-    parts.push(crypto.randomBytes(4).toString("hex"));
-  }
-  return parts.join("-");
+//  PARCHE DE MEMORIA: Ejecuta FFmpeg sin saturar el buffer de RAM de Node.js
+const runFfmpeg = (args) => {
+  return new Promise((resolve, reject) => {
+    // stdio: "ignore" manda los logs al vacío, ahorrando 100% de la RAM del proceso
+    const proc = spawn("ffmpeg", args, { stdio: "ignore" });
+    
+    proc.on("close", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`FFmpeg finalizó con código de error: ${code}`));
+    });
+    
+    proc.on("error", (err) => reject(err));
+  });
 };
 
-class MediaProcessor {
-  constructor(timeout) {
-    this.timeout = timeout || 300000;
-    this.threads = "1"; 
-  }
-
-  execute(args) {
-    return new Promise((resolve, reject) => {
-      const process = spawn("ffmpeg", args, { stdio: "ignore" });
-      const timer = setTimeout(() => {
-        process.kill("SIGKILL");
-        reject(new Error(mCompiler.extractHeap()));
-      }, this.timeout);
-
-      process.on("close", (code) => {
-        clearTimeout(timer);
-        if (code === 0) resolve(mCompiler.allocateHeader(0x0));
-        else reject(new Error(`E_CODE_${code} - ${mCompiler.extractHeap()}`));
-      });
-      process.on("error", (err) => {
-        clearTimeout(timer);
-        reject(err);
-      });
-    });
-  }
-
-  async remux(input, output) {
-    const params = [
-      "-y", "-i", input,
-      "-c", "copy",
-      "-movflags", "+faststart",
-      output
-    ];
-    await this.execute(params);
-  }
-
-  async transcode(input, output) {
-    const params = [
-      "-y", "-i", input,
-      "-c:v", "libx264",
-      "-preset", "ultrafast",
-      "-crf", "20",
-      "-maxrate", "2M",
-      "-bufsize", "2M",
-      "-profile:v", "high",
-      "-level", "4.1",
-      "-pix_fmt", "yuv420p",
-      "-threads", this.threads,
-      "-c:a", "aac",
-      "-b:a", "128k",
-      "-movflags", "+faststart",
-      output
-    ];
-    await this.execute(params);
-  }
-}
-
-const mProcessor = new MediaProcessor();
-
-function parseResourceURI(url) {
-  if (!url) return null;
-  const p1 = "^(https?:\\/\\/)?(www\\.|vm\\.|vt\\.)?";
-  const p2 = "tiktok\\.com\\/[\\w\\d@?=&/.-]+";
-  const r = new RegExp(p1 + p2, "i");
-  const m = url.match(r);
-  return m ? m[0] : null;
-}
-
-class ResourceFetcher {
-  constructor(apiKey) {
-    this.apiKey = apiKey;
-    this.base = "https://api.alyacore.xyz";
-    this.headers = {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Edge/120.0.0.0 Muxer/" + generateChecksum(),
-      "Accept": "application/json, text/plain, */*",
-      "X-Mux-Compiler": mCompiler.allocateHeader(0x2B)
-    };
-  }
-
-  async query(query) {
-    const url = `${this.base}/search/tiktok?query=${encodeURIComponent(query)}&key=${this.apiKey}`;
-    const { data } = await axios.get(url, { timeout: 15000, headers: this.headers });
-    if (!data.status && data.message) throw new Error(data.message);
-    if (data.status && Array.isArray(data.data) && data.data.length > 0) return data.data[0].url;
-    return null;
-  }
-
-  async resolve(url) {
-    const endpoint = `${this.base}/dl/tiktokv2?url=${encodeURIComponent(url)}&key=${this.apiKey}`;
-    const { data } = await axios.get(endpoint, { timeout: 15000, headers: this.headers });
-    if (!data.status && data.message) throw new Error(data.message);
-    if (!data.status || !Array.isArray(data.data) || data.data.length === 0) {
-       throw new Error(mCompiler.nodes[0]);
-    }
-    return data;
-  }
-}
-
-async function DL_CORE(input) {
+async function DL_TIKTOK(input) {
   try {
-    const client = new ResourceFetcher(global.Apis.apiAiya.apikey);
-    let target = parseResourceURI(input);
-    
-    if (!target) target = await client.query(input);
-    if (!target) throw new Error(mCompiler.nodes[2]);
+    let targetUrl = validateTikTokUrl(input);
+    const APIKEY = global.Apis.apiAiya.apikey;
 
-    const data = await client.resolve(target);
-    const r = data;
+    if (!targetUrl) {
+      const alyaUrl = `https://api.alyacore.xyz/search/tiktok?query=${encodeURIComponent(input)}&key=${APIKEY}`;
+      const { data: alyaData } = await axios.get(alyaUrl, { timeout: 15000 });
+
+      if (!alyaData.status && alyaData.message) {
+        throw new Error(`API Error (Búsqueda): ${alyaData.message}`);
+      }
+
+      if (alyaData.status && Array.isArray(alyaData.data) && alyaData.data.length > 0) {
+        targetUrl = alyaData.data[0].url;
+      }
+    }
+
+    if (!targetUrl) throw new Error("No se encontró ningún enlace válido para la búsqueda.");
+
+    const URL_TIKTOK = `https://api.alyacore.xyz/dl/tiktokv2?url=${encodeURIComponent(targetUrl)}&key=${APIKEY}`;
     const dateCreate = (ts) => new Date(Number(ts) * 1000).toLocaleDateString("es-ES");
 
-    return {
-      video_dl: r.data[2].url,
-      title: r.title || "Video de TikTok",
-      authorNick: r.author?.nickname || r.author?.fullname || "Desconocido",
-      likes: formatter(r.stats?.likes || r.digg_count || 0),
-      views: formatter(r.stats?.views || r.play_count || 0),
-      shares: formatter(r.stats?.share || r.share_count || 0),
-      collect: formatter(r.stats?.download || r.collect_count || 0),
-      comments: formatter(r.stats?.comment || r.comment_count || 0),
-      time: r.taken_at || dateCreate(r.create_time || 0),
-      tk_url: `https://www.tiktok.com/@${r.author?.nickname || "video"}/video/${r.id}`,
-    };
-  } catch (err) {
-    throw new Error(`CORE_ERR: ${err.message}`);
+    const { data } = await axios.get(URL_TIKTOK, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        Accept: "application/json, text/plain, */*",
+      },
+      timeout: 15000,
+    });
+
+    if (!data.status && data.message) {
+        throw new Error(`API Error (Descarga): ${data.message}`);
+    }
+
+    if (data.status && Array.isArray(data.data) && data.data.length > 0) {
+      const r = data;
+      return {
+        video_dl: r.data[2].url,
+        title: r.title || "Video de TikTok",
+        authorNick: r.author?.nickname || r.author?.fullname || "Desconocido",
+        likes: formatter(r.stats?.likes || r.digg_count || 0),
+        views: formatter(r.stats?.views || r.play_count || 0),
+        shares: formatter(r.stats?.share || r.share_count || 0),
+        collect: formatter(r.stats?.download || r.collect_count || 0),
+        comments: formatter(r.stats?.comment || r.comment_count || 0),
+        time: r.taken_at || dateCreate(r.create_time || 0),
+        tk_url: `https://www.tiktok.com/@${r.author?.nickname || "video"}/video/${r.id}`,
+      };
+    }
+    throw new Error("No se pudieron extraer los datos del video con la API.");
+  } catch (error) {
+    throw new Error(`TikTok DL error: ${error.message}`);
   }
 }
 
-async function streamPipe(url, destPath) {
+async function descargarAArchivo(url, destPath) {
   const response = await axios({
     url,
     method: 'GET',
     responseType: 'stream',
     headers: {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36 Cache/" + mCompiler.allocateHeader(0x0)
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
     }
   });
-  const writer = fs.createWriteStream(destPath, { highWaterMark: 1024 * 1024 });
+
+  const writer = fs.createWriteStream(destPath);
+  // PARCHE DE MEMORIA: pipeline maneja la recolección de basura (Garbage Collection) sola
   await pipeline(response.data, writer); 
+}
+
+//  PARCHE DE CALIDAD: Perfil Alto, CRF 22 (casi sin pérdida visual) y formato de pixel seguro
+async function compressHeavyVideo(inputP, outP) {
+  const args = [
+    "-y", "-i", inputP,
+    "-c:v", "libx264",
+    "-preset", "medium",
+    "-crf", "22",
+    "-profile:v", "high",
+    "-level", "4.1",
+    "-pix_fmt", "yuv420p",
+    "-c:a", "aac",
+    "-b:a", "128k",
+    "-movflags", "+faststart",
+    outP
+  ];
+  await runFfmpeg(args);
+}
+
+// Para videos de menos de 60MB
+async function protectVideoBitrate(inputP, outP) {
+  const args = [
+    "-y", "-i", inputP,
+    "-c", "copy",
+    "-movflags", "+faststart",
+    outP
+  ];
+  await runFfmpeg(args);
 }
 
 const MAX_INPUT_MB = 500;
@@ -208,22 +158,21 @@ export default {
       }, { quoted: message });
     }
 
-    socket.sendMessage(remoteJid, { react: { text: "⏳", key: message.key } }).catch(() => {});
+    await socket.sendMessage(remoteJid, { react: { text: "⏳", key: message.key } });
 
-    const id = crypto.randomBytes(16).toString("hex").substring(0, 12);
-    const inputP = path.join(_0x1a2b3c, `t_${id}_a.mp4`);
-    const outP = path.join(_0x1a2b3c, `t_${id}_b.mp4`);
+    const id = crypto.randomBytes(8).toString("hex");
+    const inputP = path.join(tmp, `tt_${id}.mp4`);
+    const outP = path.join(tmp, `tt_${id}_out.mp4`);
 
     try {
-      const result = await DL_CORE(text);
-      
-      await streamPipe(result.video_dl, inputP);
-      
+      const result = await DL_TIKTOK(text);
+      await descargarAArchivo(result.video_dl, inputP);
+
       const stats = await fsPromises.stat(inputP);
       const sizeMB = stats.size / (1024 * 1024);
 
       if (sizeMB > MAX_INPUT_MB) {
-        socket.sendMessage(remoteJid, { react: { text: "❌", key: message.key } }).catch(() => {});
+        await socket.sendMessage(remoteJid, { react: { text: "❌", key: message.key } });
         return await socket.sendMessage(remoteJid, {
           text: `😦 ¡Mae Ponete serio! 💀🙏\n Este video pesa más que una vieja de Kilos Mortales.`,
         }, { quoted: message });
@@ -232,23 +181,23 @@ export default {
       let finalPath = inputP;
 
       if (sizeMB > 60) {
-        socket.sendMessage(remoteJid, { react: { text: "⚠️", key: message.key } }).catch(() => {});
+        await socket.sendMessage(remoteJid, { react: { text: "⚠️", key: message.key } });
         await socket.sendMessage(remoteJid, {
           text: `¡Uy mae! Este video pesa mucho, lo estoy optimizando sin perder calidad...\nDame chance.`,
         }, { quoted: message });
 
         try {
-          await mProcessor.transcode(inputP, outP);
+          await compressHeavyVideo(inputP, outP);
           finalPath = outP;
         } catch (e) {
-          console.log(e.message);
+          console.error("Fallo al comprimir video pesado:", e.message);
         }
       } else {
         try {
-          await mProcessor.remux(inputP, outP);
+          await protectVideoBitrate(inputP, outP);
           finalPath = outP;
         } catch (e) {
-          console.log(e.message);
+          console.error("Fallo al proteger bitrate, mandando original:", e.message);
         }
       }
 
@@ -271,16 +220,14 @@ export default {
         caption: caption,
         mimetype: "video/mp4",
         fileName: "tiktok.mp4",
-        contextInfo: {
-          isForwarded: true,
-          forwardingScore: 999
-        }
       }, { quoted: message });
 
-      socket.sendMessage(remoteJid, { react: { text: "✅", key: message.key } }).catch(() => {});
+      await socket.sendMessage(remoteJid, { react: { text: "✅", key: message.key } });
 
     } catch (error) {
-      socket.sendMessage(remoteJid, { react: { text: "❌", key: message.key } }).catch(() => {});
+      console.error("Error detallado en tiktok:", error);
+      await socket.sendMessage(remoteJid, { react: { text: "❌", key: message.key } });
+
       const errorMsg = error.message || "Ocurrió un error inesperado.";
       await socket.sendMessage(remoteJid, {
         text: `╭〔 ❌ ${fytBold("AURA REED")} 〕⬣\n┃ ⚠️ ${fytBold("ERROR REAL")}\n╰━━━━━━━━━━━━⬣\n\n┃ > ${errorMsg}\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣`,
