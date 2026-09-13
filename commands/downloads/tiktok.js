@@ -71,12 +71,12 @@ async function DL_TIKTOK(input) {
         video_dl: r.data[2].url,
         title: r.title || "Video de TikTok",
         authorNick: r.author?.nickname || r.author?.fullname || "Desconocido",
-        likes: r.stats?.likes || formatter(r.digg_count || 0),
-        views: r.stats?.views || formatter(r.play_count || 0),
-        shares: r.stats?.share || formatter(r.share_count || 0),
-        collect: r.stats?.download || formatter(r.collect_count || 0),
-        comments: r.stats?.comment || formatter(r.comment_count || 0),
-        time: r.taken_at || dateCreate(r.create_time || 0),
+        likes: formatter(r.stats?.likes || r.digg_count || 0),
+        views: formatter(r.stats?.views || r.play_count || 0),
+        shares: formatter(r.stats?.share || r.share_count || 0),
+        collect: formatter(r.stats?.download || r.collect_count || 0),
+        comments: formatter(r.stats?.comment || r.comment_count || 0),
+        time: dateCreate(r.taken_at || r.create_time || 0),
         tk_url: `https://www.tiktok.com/@${r.author?.fullname}/video/${r.id}`,
       };
     }
