@@ -1,5 +1,4 @@
 import { createCanvas, loadImage } from "@napi-rs/canvas";
-import { jidNormalizedUser } from "@whiskeysockets/baileys";
 import { resolveLidToRealJid } from "../../models/utils.js";
 import { fytBold } from "../../models/TextStyle.js";
 
@@ -127,23 +126,23 @@ export default {
     const mentioned = messageContext?.mentionedJid || [];
     const quotedParticipant = messageContext?.participant;
 
-    let userA = jidNormalizedUser(jidRemitente);
+    let userA = jidRemitente || m.key.participant;
     let userB = null;
 
     if (mentioned.length >= 2) {
-      userA = jidNormalizedUser(mentioned[0]);
-      userB = jidNormalizedUser(mentioned[1]);
+      userA = mentioned[0];
+      userB = mentioned[1];
     } else if (mentioned.length === 1) {
-      userB = jidNormalizedUser(mentioned[0]);
+      userB = mentioned[0];
     } else if (quotedParticipant) {
-      userB = jidNormalizedUser(quotedParticipant);
+      userB = quotedParticipant;
     }
 
-    if (!userB) {
+    if (!userA || !userB) {
       return await sock.sendMessage(
         remoteJid,
         {
-          text: "『💘』Mencioná a alguien (o respondé su mensaje) para hacer el ship.\n\n*Uso:* .ship @usuario",
+          text: "『💘』No pude identificar a los usuarios. Mencioná a alguien (o respondé su mensaje) para hacer el ship.\n\n*Uso:* .ship @usuario",
         },
         { quoted: m },
       );
@@ -159,6 +158,17 @@ export default {
 
     userA = await resolveLidToRealJid(userA, sock, remoteJid);
     userB = await resolveLidToRealJid(userB, sock, remoteJid);
+
+    const mentions = [userA, userB].filter(
+      (jid) => typeof jid === "string" && jid.includes("@"),
+    );
+    if (mentions.length !== 2) {
+      return await sock.sendMessage(
+        remoteJid,
+        { text: "『💘』No pude identificar correctamente a los dos usuarios." },
+        { quoted: m },
+      );
+    }
 
     const width = 1024;
     const height = 576;
@@ -218,7 +228,7 @@ export default {
       {
         image: buffer,
         caption,
-        mentions: [userA, userB],
+        mentions,
       },
       { quoted: m },
     );
