@@ -28,7 +28,7 @@ function validateTikTokUrl(url) {
 class MediaProcessor {
   constructor(timeout) {
     this.timeout = timeout || 300000;
-    this.threads = "4";
+    this.threads = "1"; 
   }
 
   execute(args) {
@@ -51,7 +51,29 @@ class MediaProcessor {
     });
   }
 
-  async rawRemux(input, output) {
+  verifyIntegrity(input) {
+    return new Promise((resolve) => {
+      const proc = spawn("ffprobe", [
+        "-v", "error",
+        "-select_streams", "v:0",
+        "-show_entries", "stream=codec_name,pix_fmt,level",
+        "-of", "csv=p=0",
+        input
+      ]);
+      let out = "";
+      proc.stdout.on("data", (d) => out += d.toString());
+      proc.on("close", () => {
+        const res = out.trim().toLowerCase().replace(/\s+/g, '');
+        const isH264 = res.includes("h264");
+        const isSafeColor = res.includes("yuv420p") || res.includes("yuvj420p");
+        const isSafeLevel = !res.includes("50") && !res.includes("51") && !res.includes("52");
+        resolve(isH264 && isSafeColor && isSafeLevel);
+      });
+      proc.on("error", () => resolve(false));
+    });
+  }
+
+  async remux(input, output) {
     const params = [
       "-y", "-fflags", "+genpts", "-i", input,
       "-map", "0:v:0", "-map", "0:a:0?",
@@ -62,19 +84,44 @@ class MediaProcessor {
     await this.execute(params);
   }
 
-  async transcode(input, output) {
+  async patchStream(input, output) {
     const params = [
       "-y", "-fflags", "+genpts", "-i", input,
+      "-vf", "scale='min(720,iw)':-2",
       "-map", "0:v:0", "-map", "0:a:0?",
       "-c:v", "libx264",
-      "-preset", "ultrafast",
-      "-crf", "16",
-      "-profile:v", "high",
+      "-preset", "superfast",
+      "-crf", "24",
+      "-profile:v", "main",
       "-level", "4.1",
       "-pix_fmt", "yuv420p",
       "-threads", this.threads,
-      "-max_muxing_queue_size", "2048",
-      "-c:a", "copy",
+      "-c:a", "aac",
+      "-b:a", "128k",
+      "-shortest",
+      "-movflags", "+faststart",
+      output
+    ];
+    await this.execute(params);
+  }
+
+  async transcode(input, output) {
+    const params = [
+      "-y", "-fflags", "+genpts", "-i", input,
+      "-vf", "scale='min(720,iw)':-2",
+      "-map", "0:v:0", "-map", "0:a:0?",
+      "-c:v", "libx264",
+      "-preset", "fast",
+      "-crf", "24",
+      "-maxrate", "3M",
+      "-bufsize", "3M",
+      "-profile:v", "main",
+      "-level", "4.1",
+      "-pix_fmt", "yuv420p",
+      "-threads", this.threads,
+      "-c:a", "aac",
+      "-b:a", "128k",
+      "-shortest",
       "-movflags", "+faststart",
       output
     ];
@@ -154,6 +201,8 @@ async function downloadToFile(url, destPath) {
   await pipeline(response.data, writer); 
 }
 
+const MAX_INPUT_MB = 500;
+
 export default {
   name: ["tk", "tt", "ttv", "tiktok", "tkmp4"],
   category: "downloads",
@@ -165,7 +214,7 @@ export default {
 
     if (!text) {
       return await socket.sendMessage(remoteJid, {
-        text: `⚡ ${fytBold("Falta enlace o búsqueda de TikTok.")}`,
+        text: `╭〔 ⚠️ ${fytBold("AURA REED")} 〕⬣\n┃ ❌ ${fytBold("FALTA BÚSQUEDA")}\n╰━━━━━━━━━━━━⬣\n\n┃ > Por favor, proporciona una búsqueda o\n┃ > un enlace válido de TikTok.\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣`,
       }, { quoted: message });
     }
 
@@ -179,37 +228,62 @@ export default {
       const result = await getTikTokData(text);
       await downloadToFile(result.video_dl, inputP);
 
-      const statsBefore = await fsPromises.stat(inputP);
-      const originalSizeMB = (statsBefore.size / (1024 * 1024)).toFixed(2);
+      const stats = await fsPromises.stat(inputP);
+      const sizeMB = stats.size / (1024 * 1024);
+
+      if (sizeMB > MAX_INPUT_MB) {
+        socket.sendMessage(remoteJid, { react: { text: "❌", key: message.key } }).catch(() => {});
+        return await socket.sendMessage(remoteJid, {
+          text: `😦 ¡Mae Ponete serio! 💀🙏\n Este video pesa más que una vieja de Kilos Mortales.`,
+        }, { quoted: message });
+      }
 
       let finalPath = inputP;
-      let actionType = "Original";
 
-      if (statsBefore.size / (1024 * 1024) > 60) {
-        actionType = "Optimizado";
+      if (sizeMB > 60) {
+        socket.sendMessage(remoteJid, { react: { text: "⚠️", key: message.key } }).catch(() => {});
         await socket.sendMessage(remoteJid, {
-          text: `⚠️ ${fytBold("Video pesado detectado (>60MB), optimizando para WhatsApp a máxima velocidad...")}`,
+          text: `¡Uy mae! Este video pesa mucho, lo estoy optimizando sin perder calidad...\nDame chance.`,
         }, { quoted: message });
 
         try {
           await mediaProcessor.transcode(inputP, outP);
           finalPath = outP;
         } catch (e) {
-          await mediaProcessor.rawRemux(inputP, outP);
-          finalPath = outP;
+          try {
+            await mediaProcessor.remux(inputP, outP);
+            finalPath = outP;
+          } catch (err) {
+            console.log(err.message);
+          }
         }
       } else {
-        await mediaProcessor.rawRemux(inputP, outP);
-        finalPath = outP;
+        try {
+          const isSafe = await mediaProcessor.verifyIntegrity(inputP);
+          if (isSafe) {
+            await mediaProcessor.remux(inputP, outP);
+          } else {
+            await mediaProcessor.patchStream(inputP, outP);
+          }
+          finalPath = outP;
+        } catch (e) {
+          console.log(e.message);
+        }
       }
 
-      const statsAfter = await fsPromises.stat(finalPath);
-      const finalSizeMB = (statsAfter.size / (1024 * 1024)).toFixed(2);
-
-      let caption = `🎬 ${fytBold(result.title)}\n\n`;
-      caption += `👤 ${result.authorNick} | 👀 ${result.views} | ❤️ ${result.likes}\n`;
-      caption += `📦 Peso: ${originalSizeMB}MB ➔ ${finalSizeMB}MB (${actionType})\n`;
-      caption += `🔗 ${result.tk_url}`;
+      let caption = `╭〔 🎥 ${fytBold("TIKTOK VIDEO")} 〕━⬣\n\n`;
+      caption += `┃ ➥ ${fytBold(result.title)}\n\n`;
+      caption += `┣━━━━━━━━━━━━⬣\n`;
+      caption += `┃ > ${fytBold("Autor")} › ${result.authorNick}\n`;
+      caption += `┃ > ${fytBold("Fecha")} › ${result.time}\n`;
+      caption += `┃ > ${fytBold("Vistas")} › ${result.views}\n`;
+      caption += `┃ > ${fytBold("Likes")} › ${result.likes}\n`;
+      caption += `┃ > ${fytBold("Comentarios")} › ${result.comments}\n`;
+      caption += `┃ > ${fytBold("Favoritos")} › ${result.collect}\n`;
+      caption += `┃ > ${fytBold("Compartidos")} › ${result.shares}\n`;
+      caption += `┣━━━━━━━━━━━━⬣\n`;
+      caption += `┃ > ${fytBold("Url")} › ${result.tk_url}\n`;
+      caption += `╰〔 ⚡ ${fytBold("SYSTEM ACTIVE")} 〕⬣`;
 
       await socket.sendMessage(remoteJid, {
         video: { url: finalPath },
@@ -228,7 +302,7 @@ export default {
       socket.sendMessage(remoteJid, { react: { text: "❌", key: message.key } }).catch(() => {});
       const errorMsg = error.message || "Ocurrió un error inesperado.";
       await socket.sendMessage(remoteJid, {
-        text: `❌ ${fytBold("Error:")} ${errorMsg}`,
+        text: `╭〔 ❌ ${fytBold("AURA REED")} 〕⬣\n┃ ⚠️ ${fytBold("ERROR REAL")}\n╰━━━━━━━━━━━━⬣\n\n┃ > ${errorMsg}\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣`,
       }, { quoted: message });
 
     } finally {
