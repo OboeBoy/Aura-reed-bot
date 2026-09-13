@@ -1,8 +1,5 @@
-import { generateDeviceId, randomChar } from '../../utils/helpers';
+import { generateDeviceId, randomChar } from '../../utils/helpers.ts';
 
-/**
- * Build parameters for TikTok v1 API feed endpoint
- */
 export const buildTiktokApiParams = (awemeId: string): URLSearchParams => {
   return new URLSearchParams({
     aweme_id: awemeId,
