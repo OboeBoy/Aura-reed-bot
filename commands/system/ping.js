@@ -52,19 +52,9 @@ export default {
   category: "system",
 
   async execute(sock, m, args) {
-    const start = performance.now();
+    const t0 = performance.now();
 
     
-    const { key } = await sock.sendMessage(
-      m.key.remoteJid,
-      {
-        text: `⚡ ${fytBold("CALCULANDO VELOCIDAD")} ⚡\n\n╭━━〔 ${fytBold("AURA REED SYSTEM")} 〕━━⬣\n┃ ⚙️ Midiendo procesamiento...\n╰━━━━━━━━━━━━━━━━⬣\n`,
-      },
-      { quoted: m },
-    );
-
-    const processTime = Math.round(performance.now() - start);
-
     const memory = getMemoryInfo();
     const usedRAM = memory.used;
     const totalRAM = memory.total;
@@ -79,12 +69,14 @@ export default {
       ramStatus = "🔴 Crítico";
     }
 
+    const processTime = Math.round(performance.now() - t0);
+
     let status = "";
     let system = "";
-    if (processTime < 50) {
-      status = "🟢 Instantáneo";
+    if (processTime < 5) {
+      status = "🟢 Ultra Rápido";
       system = "Estable";
-    } else if (processTime < 150) {
+    } else if (processTime < 20) {
       status = "🟢 Excelente";
       system = "Estable";
     } else {
@@ -92,12 +84,11 @@ export default {
       system = "Estable";
     }
 
+    const responseText = `⚡ ${fytBold("RESULTADO DE LA PRUEBA")} ⚡\n\n╭━━〔 ${fytBold("AURA REED SYSTEM")} 〕━━⬣\n┃ ⚡ ${fytBold("Velocidad Bot:")} *${processTime}ms*\n┃ 📶 ${fytBold("Estado:")} *${status}*\n┃ 📊 ${fytBold("Estado RAM:")} ${ramStatus}\n┃ 🔥 ${fytBold("Sistema:")} *${system}*\n╰━━━━━━━━━━━━━━━━⬣`;
+
     await sock.sendMessage(
       m.key.remoteJid,
-      {
-        text: `⚡ ${fytBold("RESULTADO DE LA PRUEBA")} ⚡\n\n╭━━〔 ${fytBold("AURA REED SYSTEM")} 〕━━⬣\n┃ ⚡ ${fytBold("Velocidad Bot:")} *${processTime}ms*\n┃ 📶 ${fytBold("Estado:")} *${status}*\n┃ 📊 ${fytBold("Estado RAM:")} ${ramStatus}\n┃ 🔥 ${fytBold("Sistema:")} *${system}*\n╰━━━━━━━━━━━━━━━━⬣`,
-        edit: key,
-      },
+      { text: responseText },
       { quoted: m },
     );
   },
