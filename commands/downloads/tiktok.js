@@ -8,7 +8,7 @@ import fs from "fs";
 import crypto from "crypto";
 import formatter from "../../controllers/functions/formatNumbers.js";
 import { fytBold } from "../../models/TextStyle.js";
-import { TikTokClient } from "../../src/libs/tiktok-api/index.js";
+import { TikTokClient } from "../../src/libs/tiktok-api/index.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const customTemp = path.join(__dirname, "../../tmp");
