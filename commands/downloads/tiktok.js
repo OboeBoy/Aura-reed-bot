@@ -69,6 +69,19 @@ async function resolveTiktokUrl(rawText) {
   const directUrl = extractTiktokUrl(rawText);
   if (directUrl) return directUrl;
 
+  const APIKEY = global.Apis?.apiAiya?.apikey;
+  if (APIKEY) {
+    try {
+      const alyaUrl = `https://api.alyacore.xyz/search/tiktok?query=${encodeURIComponent(rawText)}&key=${APIKEY}`;
+      const { data: alyaData } = await axios.get(alyaUrl, { timeout: 15000 });
+      if (alyaData.status && Array.isArray(alyaData.data) && alyaData.data.length > 0) {
+        return alyaData.data[0].url;
+      }
+    } catch (e) {
+      console.error("Alya search fallback error:", e.message);
+    }
+  }
+
   const search = await tiktokClient.search(rawText, { resultLimit: 1 });
   if (search.error || !search.data || !search.data.length) {
     throw new Error(`No encontré ningún video de TikTok para "${rawText}".`);
@@ -138,7 +151,7 @@ async function descargarAArchivo(url, destPath) {
 
 async function processVideoFile(inputP, outP) {
   await execAsync(
-    `ffmpeg -y -i "${inputP}" -vf "scale='min(1920,iw)':-2" -c:v libx264 -preset ultrafast -crf 28 -c:a aac -b:a 128k "${outP}"`,
+    `ffmpeg -y -fflags +genpts -i "${inputP}" -map 0:v:0 -map 0:a:0? -vf "scale='min(1080,iw)':-2" -c:v libx264 -preset ultrafast -crf 17 -profile:v main -level 4.0 -pix_fmt yuv420p -threads 0 -c:a aac -b:a 192k -shortest -movflags +faststart "${outP}"`,
     { maxBuffer: 1024 * 1024 * 10 },
   );
 }
@@ -213,7 +226,7 @@ export default {
         await socket.sendMessage(
           remoteJid,
           {
-            text: `¡Uy mae! Este video pesa mucho, voy a tener que hacerlo más liviano.\nDame chance ....`,
+            text: `¡Uy mae! Este video pesa mucho, exprimiendo el procesador para procesarlo sin perder calidad.\nDame chance ....`,
           },
           { quoted: message },
         );
@@ -239,12 +252,12 @@ export default {
 
         if (codec === 'h264') {
           await execAsync(
-            `ffmpeg -y -i "${finalPath}" -c copy -movflags +faststart "${whatsappReadyPath}"`,
+            `ffmpeg -y -fflags +genpts -i "${finalPath}" -map 0:v:0 -map 0:a:0? -c copy -movflags +faststart "${whatsappReadyPath}"`,
             { maxBuffer: 1024 * 1024 * 10 }
           );
         } else {
           await execAsync(
-            `ffmpeg -y -i "${finalPath}" -c:v libx264 -preset ultrafast -c:a aac "${whatsappReadyPath}"`,
+            `ffmpeg -y -fflags +genpts -i "${finalPath}" -map 0:v:0 -map 0:a:0? -c:v libx264 -preset ultrafast -crf 17 -profile:v main -level 4.0 -pix_fmt yuv420p -threads 0 -c:a aac -b:a 192k -shortest -movflags +faststart "${whatsappReadyPath}"`,
             { maxBuffer: 1024 * 1024 * 10 }
           );
         }
