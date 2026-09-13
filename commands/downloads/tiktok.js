@@ -55,7 +55,6 @@ class MediaProcessor {
     const params = [
       "-y", "-fflags", "+genpts", "-i", input,
       "-vf", "scale='min(720,iw)':-2",
-      "-map", "0:v:0", "-map", "0:a:0?",
       "-c:v", "libx264",
       "-preset", "fast",
       "-crf", "23",
@@ -65,8 +64,6 @@ class MediaProcessor {
       "-threads", this.threads,
       "-c:a", "aac",
       "-b:a", "128k",
-      "-ar", "44100",
-      "-shortest",
       "-movflags", "+faststart",
       output
     ];
