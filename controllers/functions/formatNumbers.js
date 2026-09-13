@@ -1,12 +1,14 @@
 export default function fomatNumber(valor) {
   if (valor === null || valor === undefined) return "0";
+
   const raw = String(valor).trim();
-  if (!raw) return "0";
-
-  if (/^[\d,.]+[kKmMbBtT]$/.test(raw)) return raw.toUpperCase();
-
   const normalized = raw.replace(/,/g, "");
   const numero = Number(normalized);
+
+  if (!raw) return "0";
+  if (/^[\d,.]+[kKmMbBtT]$/.test(raw)) return raw.toUpperCase();
+
+
   if (!Number.isFinite(numero)) return raw;
 
   if (numero >= 1e24) {
