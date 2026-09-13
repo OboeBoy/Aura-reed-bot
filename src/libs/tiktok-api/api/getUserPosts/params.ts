@@ -1,6 +1,6 @@
 import { DEFAULT_MS_TOKEN } from '../../constants/tokens.ts';
 import { generateDeviceId, generateOdinId } from '../../utils/helpers.ts';
-import { PostItemRequestType } from './types';
+import { PostItemRequestType } from './types.ts';
 
 const LANG = 'en';
 
