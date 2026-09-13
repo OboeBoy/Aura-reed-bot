@@ -61,7 +61,7 @@ export default {
       text += memberJids.map((jid) => `┃ ➪ @${jid.split("@")[0]}`).join("\n");
       text += `\n\n╰〔 ⚡ 𝐒𝐘𝐒𝐓𝐄𝐌 〕⬣`;
 
-      await socket.sendMessage(remoteJid, { text, memberJids });
+      await socket.sendMessage(remoteJid, { text, mentions: memberJids });
     } catch (error) {
       console.error("[AURA REED] Error al obtener miembros del grupo:", error);
     }
