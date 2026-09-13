@@ -28,7 +28,7 @@ function validateTikTokUrl(url) {
 class MediaProcessor {
   constructor(timeout) {
     this.timeout = timeout || 300000;
-    this.threads = "1"; 
+    this.threads = "0";
   }
 
   execute(args) {
@@ -90,14 +90,14 @@ class MediaProcessor {
       "-vf", "scale='min(1080,iw)':-2",
       "-map", "0:v:0", "-map", "0:a:0?",
       "-c:v", "libx264",
-      "-preset", "superfast",
-      "-crf", "24",
+      "-preset", "ultrafast",
+      "-crf", "17",
       "-profile:v", "main",
       "-level", "4.1",
       "-pix_fmt", "yuv420p",
       "-threads", this.threads,
-      "-c:a", "aac",
-      "-b:a", "128k",
+      "-max_muxing_queue_size", "2048",
+      "-c:a", "copy",
       "-shortest",
       "-movflags", "+faststart",
       output
@@ -111,16 +111,14 @@ class MediaProcessor {
       "-vf", "scale='min(1080,iw)':-2",
       "-map", "0:v:0", "-map", "0:a:0?",
       "-c:v", "libx264",
-      "-preset", "fast",
-      "-crf", "24",
-      "-maxrate", "3M",
-      "-bufsize", "3M",
+      "-preset", "ultrafast",
+      "-crf", "17",
       "-profile:v", "main",
       "-level", "4.1",
       "-pix_fmt", "yuv420p",
       "-threads", this.threads,
-      "-c:a", "aac",
-      "-b:a", "128k",
+      "-max_muxing_queue_size", "2048",
+      "-c:a", "copy",
       "-shortest",
       "-movflags", "+faststart",
       output
