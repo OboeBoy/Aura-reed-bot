@@ -48,29 +48,55 @@ async function DL_TIKTOK(input) {
   
   try {
     const { data } = await axios.get(`https://api.alyacore.xyz/dl/tiktokv2?url=${encodeURIComponent(targetUrl)}&key=${APIKEY}`, { timeout: 12000 });
-    if (data.status && data.data?.length > 0) {
-      return {
-        videoUrl: data.data[0]?.url || data.data[1]?.url || data.data[2]?.url,
-        title: data.title || "Sin título",
-        author: data.author?.nickname || "Desconocido",
-      };
+    if (data.status && data.data) {
+      const items = Array.isArray(data.data) ? data.data : [data.data];
+      const nowm = items.find(v => v?.type === "nowatermark_hd" || v?.type === "nowatermark") || items[0];
+      const videoUrl = nowm?.url || items[0]?.url;
+
+      if (videoUrl) {
+        return {
+          videoUrl,
+          title: data.title || "Sin título",
+          author: data.author?.nickname || "Desconocido",
+        };
+      }
     }
   } catch (e) {}
 
   try {
     const { data } = await axios.get(`https://api.alyacore.xyz/api/tiktok?url=${encodeURIComponent(targetUrl)}&key=${APIKEY}`, { timeout: 15000 });
-    if (data.status && data.data?.video) {
-      return {
-        videoUrl: data.data.video,
-        title: data.data.title || "Sin título",
-        author: data.data.author?.nickname || "Desconocido",
-      };
+    if (data.status && data.data) {
+      const videoUrl = data.data.play || data.data.hdplay || data.data.wmplay || data.data.video;
+      if (videoUrl) {
+        return {
+          videoUrl,
+          title: data.data.title || "Sin título",
+          author: data.data.author?.nickname || "Desconocido",
+        };
+      }
     }
   } catch (e) {
     throw new Error(`Servidores inalcanzables: ${e.message}`);
   }
 
-  throw new Error("No se pudo obtener el medio original.");
+  try {
+    const tikwm = await axios.post("https://www.tikwm.com/api/", new URLSearchParams({ url: targetUrl, hd: "1" }), {
+      timeout: 10000,
+      headers: { "Content-Type": "application/x-www-form-urlencoded" }
+    });
+    if (tikwm.data?.data) {
+      const videoUrl = tikwm.data.data.hdplay || tikwm.data.data.play;
+      if (videoUrl) {
+        return {
+          videoUrl: videoUrl.startsWith("http") ? videoUrl : `https://www.tikwm.com${videoUrl}`,
+          title: tikwm.data.data.title || "Sin título",
+          author: tikwm.data.data.author?.nickname || "Desconocido",
+        };
+      }
+    }
+  } catch (e) {}
+
+  throw new Error("No se pudo obtener el medio original sin marca de agua.");
 }
 
 async function fastDownload(url, destPath) {
@@ -79,9 +105,9 @@ async function fastDownload(url, destPath) {
       method: "GET",
       url: url,
       responseType: "stream",
-      timeout: 25000,
+      timeout: 30000,
       headers: {
-        "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Referer": "https://www.tiktok.com/"
       }
     });
@@ -92,6 +118,7 @@ async function fastDownload(url, destPath) {
 }
 
 const MAX_INPUT_MB = 250;
+const RAW_LIMIT_MB = 60;
 
 export default {
   name: ["tk", "tt", "ttv", "tiktok", "tkmp4"],
@@ -130,27 +157,18 @@ export default {
         throw new Error(`Archivo excede límite (${initialSizeMB.toFixed(1)}MB / ${MAX_INPUT_MB}MB).`);
       }
 
-      let needsCompression = initialSizeMB > 50;
+      let needsCompression = initialSizeMB > RAW_LIMIT_MB;
       let finalSizeMB = initialSizeMB;
       let pathToSend = inputPath;
 
       if (needsCompression) {
         await socket.sendMessage(remoteJid, { text: `> ⚡ Comprimiendo (${initialSizeMB.toFixed(1)}MB)...`, react: { text: "🔥", key: message.key } });
-        const cpuCmd = `ffmpeg -y -i "${inputPath}" -threads 2 -c:v libx264 -pix_fmt yuv420p -preset ultrafast -crf 26 -c:a aac -b:a 128k -movflags +faststart "${finalPath}"`;
-        await execAsync(cpuCmd, { timeout: 60000 });
+        const cpuCmd = `ffmpeg -y -i "${inputPath}" -threads 2 -c:v libx264 -pix_fmt yuv420p -preset veryfast -crf 19 -c:a copy -movflags +faststart "${finalPath}"`;
+        await execAsync(cpuCmd, { timeout: 90000 });
+
         if (fs.existsSync(finalPath) && fs.statSync(finalPath).size > 1024) {
           pathToSend = finalPath;
           finalSizeMB = fs.statSync(finalPath).size / (1024 * 1024);
-        }
-      } else {
-        const remuxCmd = `ffmpeg -y -i "${inputPath}" -c copy -movflags +faststart "${finalPath}"`;
-        try {
-          await execAsync(remuxCmd, { timeout: 15000 });
-          if (fs.existsSync(finalPath) && fs.statSync(finalPath).size > 1024) {
-            pathToSend = finalPath;
-          }
-        } catch (e) {
-          pathToSend = inputPath;
         }
       }
 
@@ -159,7 +177,7 @@ export default {
       const shortDesc = result.title.length > 40 ? result.title.substring(0, 40) + "..." : result.title;
       const weightInfo = needsCompression && (finalSizeMB < initialSizeMB) 
         ? `(${initialSizeMB.toFixed(1)}MB ➔ ${finalSizeMB.toFixed(1)}MB) ⚡` 
-        : `(${initialSizeMB.toFixed(1)}MB)`;
+        : `(${initialSizeMB.toFixed(1)}MB) [RAW]`;
 
       let caption = `╭〔 🎥 ${fytBold("TIKTOK")} 〕⬣\n`;
       caption += `┃ 👤 ${fytBold("Por:")} ${result.author}\n`;
