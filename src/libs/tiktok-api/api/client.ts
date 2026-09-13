@@ -6,15 +6,15 @@ import Axios, {
 } from 'axios';
 import createDebug from 'debug';
 import { HttpsProxyAgent } from 'https-proxy-agent';
-import { TiktokError } from '../constants/errors';
-import { RETRY_OPTIONS } from '../constants/retry';
-import { TIKTOK_URL, TIKWM_URL, USER_AGENT } from '../constants/urls';
-import { extractMsToken } from '../utils/helpers';
-import { signUrl } from '../utils/signUrl';
+import { TiktokError } from '../constants/errors.ts';
+import { RETRY_OPTIONS } from '../constants/retry.ts';
+import { TIKTOK_URL, TIKWM_URL, USER_AGENT } from '../constants/urls.ts';
+import { extractMsToken } from '../utils/helpers.ts';
+import { signUrl } from '../utils/signUrl.ts';
 
 const debug = createDebug('tiktok-api:client');
 
-import { buildTiktokApiParams } from './downloadVideo/params';
+import { buildTiktokApiParams } from './downloadVideo/params.ts';
 import type {
   TiktokAPIResponse,
   TiktokAuthor,
@@ -26,50 +26,50 @@ import type {
   TiktokVideo,
   TiktokVideoFormat,
   TiktokVideoResult,
-} from './downloadVideo/types';
-import { getChallengeParams } from './getChallenge/params';
-import type { TiktokChallengeResponse } from './getChallenge/types';
-import { getSearchParams } from './getSearch/params';
+} from './downloadVideo/types.ts';
+import { getChallengeParams } from './getChallenge/params.ts';
+import type { TiktokChallengeResponse } from './getChallenge/types.ts';
+import { getSearchParams } from './getSearch/params.ts';
 import type {
   TikwmSearchAPIResponse,
   TikwmSearchImage,
   TikwmSearchVideoItem,
   TiktokSearchResponse,
   TiktokSearchResultItem,
-} from './getSearch/types';
-import { getPostParams } from './getPost/params';
+} from './getSearch/types.ts';
+import { getPostParams } from './getPost/params.ts';
 import type {
   TiktokPostDetailAPIResponse,
   TiktokPostResponse,
-} from './getPost/types';
+} from './getPost/types.ts';
 import {
   getCommentRepliesParams,
   getPostCommentsParams,
-} from './getPostComments/params';
+} from './getPostComments/params.ts';
 import type {
   TiktokComment,
   TiktokCommentListAPIResponse,
   TiktokCommentReplyListAPIResponse,
   TiktokPostCommentsResponse,
-} from './getPostComments/types';
+} from './getPostComments/types.ts';
 // Params builders
-import { getUserParams } from './getUser/params';
+import { getUserParams } from './getUser/params.ts';
 // Types
-import type { TiktokStalkUserResponse } from './getUser/types';
-import { getUserFollowersParams } from './getUserFollowers/params';
+import type { TiktokStalkUserResponse } from './getUser/types.ts';
+import { getUserFollowersParams } from './getUserFollowers/params.ts';
 import type {
   TiktokUserFollower,
   TiktokUserFollowersAPIResponse,
   TiktokUserFollowersResponse,
-} from './getUserFollowers/types';
-import { getUserFollowingParams } from './getUserFollowing/params';
-import { getUserPostsParams } from './getUserPosts/params';
+} from './getUserFollowers/types.ts';
+import { getUserFollowingParams } from './getUserFollowing/params.ts';
+import { getUserPostsParams } from './getUserPosts/params.ts';
 import type {
   PostItemRequestType,
   TiktokPostItem,
   TiktokUserPostsAPIResponse,
   TiktokUserPostsResponse,
-} from './getUserPosts/types';
+} from './getUserPosts/types.ts';
 
 type ClientOptions = {
   proxy?: string | null;
@@ -694,7 +694,7 @@ export class TikTokClient {
         avatar: video.author?.avatar || null,
       },
       postUrl: uniqueId && id ? `${TIKTOK_URL}/@${uniqueId}/video/${id}` : null,
-    };
+        };
   }
 
   private normalizeTikwmImages(
@@ -720,7 +720,7 @@ export class TikTokClient {
       count?: number;
       cursor?: number;
     } & RequestOverrides,
-  ): Promise<TiktokUserFollowersResponse> {
+    ): Promise<TiktokUserFollowersResponse> {
     try {
       const followers: TiktokUserFollower[] = [];
       const seenIds = new Set<string>();
@@ -778,7 +778,6 @@ export class TikTokClient {
         if (!hasMore || list.length < count) {
           hasMore = false;
         }
-
         if (followerLimit && followers.length >= followerLimit) {
           hasMore = false;
         }
@@ -836,7 +835,7 @@ export class TikTokClient {
   /**
    * Fetch following list (users that the given user follows).
    */
-  public async getUserFollowing(
+public async getUserFollowing(
     secUid: string,
     options?: {
       followingLimit?: number;
@@ -894,7 +893,6 @@ export class TikTokClient {
         if (!hasMore || list.length < count) {
           hasMore = false;
         }
-
         if (followingLimit && following.length >= followingLimit) {
           hasMore = false;
         }
@@ -952,7 +950,7 @@ export class TikTokClient {
   /**
    * Fetch comments for a given post (aweme).
    */
-  public async getPostComments(
+public async getPostComments(
     awemeId: string,
     count = 20,
     options?: { cursor?: number } & RequestOverrides,
@@ -989,7 +987,6 @@ export class TikTokClient {
           hasMore = false;
         }
       }
-
       return {
         data: comments,
         total: comments.length,
@@ -1010,8 +1007,7 @@ export class TikTokClient {
           total: 0,
         };
       }
-
-      if (err.message === 'EMPTY_RESPONSE') {
+       if (err.message === 'EMPTY_RESPONSE') {
         return {
           error: 'EMPTY_RESPONSE',
           statusCode: 0,
@@ -1035,7 +1031,7 @@ export class TikTokClient {
    * @param showOriginalResponse - Return unparsed response
    * @param overrides - Optional request overrides (proxy, region, etc.)
    */
-  public async downloadVideo(
+public async downloadVideo(
     url: string,
     showOriginalResponse?: boolean,
     overrides?: RequestOverrides,
@@ -1084,7 +1080,6 @@ export class TikTokClient {
           message: 'Could not extract video ID from URL',
         };
       }
-
       // Fetch TikTok data from v1 API
       const data = await this.fetchTiktokVideoData(
         videoId,
@@ -1107,8 +1102,7 @@ export class TikTokClient {
           resultNotParsed: data,
         };
       }
-
-      // Create response based on content type (image or video)
+        // Create response based on content type (image or video)
       const result = content.image_post_info
         ? this.createImageResponse(content, author, statistics, music)
         : this.createVideoResponse(content, author, statistics, music, formats);
@@ -1157,7 +1151,6 @@ export class TikTokClient {
           comments.push(c);
           seenIds.add(c.cid);
         }
-
         hasMore = Boolean(page?.has_more);
         if (page?.cursor !== undefined) {
           lastCursor = Number(page.cursor);
@@ -1207,7 +1200,6 @@ export class TikTokClient {
       };
     }
   }
-
   private async fetchUserPostsPage(
     secUid: string,
     count: number,
@@ -1231,7 +1223,6 @@ export class TikTokClient {
           msToken: activeMsToken,
           requestType,
         });
-
         const signedUrl = signUrl({
           url: `${TIKTOK_URL}/api/post/item_list`,
           params,
@@ -1253,7 +1244,6 @@ export class TikTokClient {
         if (!data || (typeof data === 'string' && data === '')) {
           throw new Error('EMPTY_RESPONSE');
         }
-
         return data;
       } catch (error: any) {
         if (
@@ -1303,7 +1293,6 @@ export class TikTokClient {
             signedUrl,
             axiosConfig,
           );
-
         const newMsToken = extractMsToken(headers);
         if (newMsToken) {
           this.msToken = newMsToken;
@@ -1329,7 +1318,6 @@ export class TikTokClient {
       }
     }, retryOptions);
   }
-
   private async fetchCommentRepliesPage(
     awemeId: string,
     commentId: string,
@@ -1359,587 +1347,6 @@ export class TikTokClient {
           params,
           userAgent: USER_AGENT,
         });
-
-        const { data, headers } =
-          await this.axios.get<TiktokCommentReplyListAPIResponse>(
-            signedUrl,
-            axiosConfig,
-          );
-
-        const newMsToken = extractMsToken(headers);
-        if (newMsToken) {
-          this.msToken = newMsToken;
-          activeMsToken = newMsToken;
-        }
-
-        if (!data || (typeof data === 'string' && data === '')) {
-          throw new Error('EMPTY_RESPONSE');
-        }
-
-        return data;
-      } catch (error: any) {
-        if (
-          error.response?.status === 400 ||
-          error.response?.data?.statusCode === TiktokError.INVALID_ENTITY
-        ) {
-          const invalidError: any = new Error('INVALID_ENTITY');
-          invalidError.status = 400;
-          bail(invalidError);
-          return null;
-        }
-        throw error;
-      }
-    }, retryOptions);
-  }
-
-  private async fetchUserFollowersPage(
-    secUid: string,
-    count: number,
-    cursor: number,
-    overrides?: RequestOverrides,
-  ): Promise<TiktokUserFollowersAPIResponse | null> {
-    const axiosConfig = this.buildAxiosConfig(overrides);
-    const region = this.resolveRegion(overrides);
-    let activeMsToken = this.resolveMsToken(overrides);
-    const retryOptions = this.resolveRetryOptions(overrides?.retryOptions);
-
-    return retry(async (bail) => {
-      try {
-        const params = getUserFollowersParams({
-          userAgent: USER_AGENT,
-          count,
-          cursor,
-          secUid,
-          region,
-          msToken: activeMsToken,
-        });
-
-        const signedUrl = signUrl({
-          url: `${TIKTOK_URL}/api/user/list/`,
-          params,
-          userAgent: USER_AGENT,
-        });
-
-        const { data, headers } =
-          await this.axios.get<TiktokUserFollowersAPIResponse>(
-            signedUrl,
-            axiosConfig,
-          );
-
-        const newMsToken = extractMsToken(headers);
-        if (newMsToken) {
-          this.msToken = newMsToken;
-          activeMsToken = newMsToken;
-        }
-
-        if (!data || (typeof data === 'string' && data === '')) {
-          throw new Error('EMPTY_RESPONSE');
-        }
-
-        return data;
-      } catch (error: any) {
-        if (
-          error.response?.status === 400 ||
-          error.response?.data?.statusCode === TiktokError.INVALID_ENTITY ||
-          error.response?.data?.status_code === TiktokError.INVALID_ENTITY
-        ) {
-          const invalidError: any = new Error('INVALID_ENTITY');
-          invalidError.status = 400;
-          bail(invalidError);
-          return null;
-        }
-        throw error;
-      }
-    }, retryOptions);
-  }
-
-  private async fetchUserFollowingPage(
-    secUid: string,
-    count: number,
-    cursor: number,
-    overrides?: RequestOverrides,
-  ): Promise<TiktokUserFollowersAPIResponse | null> {
-    const axiosConfig = this.buildAxiosConfig(overrides);
-    const region = this.resolveRegion(overrides);
-    let activeMsToken = this.resolveMsToken(overrides);
-    const retryOptions = this.resolveRetryOptions(overrides?.retryOptions);
-
-    return retry(async (bail) => {
-      try {
-        const params = getUserFollowingParams({
-          userAgent: USER_AGENT,
-          count,
-          cursor,
-          secUid,
-          region,
-          msToken: activeMsToken,
-        });
-
-        const signedUrl = signUrl({
-          url: `${TIKTOK_URL}/api/user/list/`,
-          params,
-          userAgent: USER_AGENT,
-        });
-
-        const { data, headers } =
-          await this.axios.get<TiktokUserFollowersAPIResponse>(
-            signedUrl,
-            axiosConfig,
-          );
-
-        const newMsToken = extractMsToken(headers);
-        if (newMsToken) {
-          this.msToken = newMsToken;
-          activeMsToken = newMsToken;
-        }
-
-        if (!data || (typeof data === 'string' && data === '')) {
-          throw new Error('EMPTY_RESPONSE');
-        }
-
-        return data;
-      } catch (error: any) {
-        if (
-          error.response?.status === 400 ||
-          error.response?.data?.statusCode === TiktokError.INVALID_ENTITY ||
-          error.response?.data?.status_code === TiktokError.INVALID_ENTITY
-        ) {
-          const invalidError: any = new Error('INVALID_ENTITY');
-          invalidError.status = 400;
-          bail(invalidError);
-          return null;
-        }
-        throw error;
-      }
-    }, retryOptions);
-  }
-
-  private async fetchTiktokVideoData(
-    videoId: string,
-    userAgent: string,
-    overrides?: RequestOverrides,
-  ): Promise<{
-    content: TiktokAwemeItem;
-    statistics: TiktokStatistics;
-    author: TiktokAuthor;
-    music: TiktokMusic;
-    formats?: TiktokVideoFormat[];
-  } | null> {
-    const params = buildTiktokApiParams(videoId);
-    const feedUrl = `https://${this.tiktokApiHost}/aweme/v1/feed/?${params}`;
-
-    try {
-      const response = await retry<TiktokAPIResponse>(
-        async () => {
-          const axiosConfig = this.buildAxiosConfig(overrides);
-          const res = await this.axios<TiktokAPIResponse>(feedUrl, {
-            ...axiosConfig,
-            method: 'OPTIONS',
-            headers: { 'User-Agent': userAgent },
-          });
-
-          if (res.data && res.data.status_code === 0) {
-            return res.data;
-          }
-
-          throw new Error('Failed to fetch TikTok data');
-        },
-        {
-          retries: 10,
-          minTimeout: 200,
-          maxTimeout: 1000,
-        },
-      );
-
-      // Find the matching video in the response
-      const content = response?.aweme_list?.find((v) => v.aweme_id === videoId);
-
-      if (!content) {
-        return null;
-      }
-
-      // Parse statistics with error handling
-      let statistics: TiktokStatistics;
-      try {
-        statistics = {
-          commentCount: content.statistics?.comment_count || 0,
-          likeCount: content.statistics?.digg_count || 0,
-          shareCount: content.statistics?.share_count || 0,
-          playCount: content.statistics?.play_count || 0,
-          downloadCount: content.statistics?.download_count || 0,
-        };
-      } catch {
-        statistics = {
-          commentCount: 0,
-          likeCount: 0,
-          shareCount: 0,
-          playCount: 0,
-          downloadCount: 0,
-        };
-      }
-
-      // Parse author with error handling
-      let author: TiktokAuthor;
-      try {
-        author = {
-          uid: content.author?.uid || '',
-          username: content.author?.unique_id || '',
-          uniqueId: content.author?.unique_id || '',
-          nickname: content.author?.nickname || '',
-          signature: content.author?.signature || '',
-          region: content.author?.region || '',
-          avatarThumb: content.author?.avatar_thumb?.url_list || [],
-          avatarMedium: content.author?.avatar_medium?.url_list || [],
-          url: content.author?.unique_id
-            ? `https://www.tiktok.com/@${content.author.unique_id}`
-            : '',
-        };
-      } catch {
-        author = {
-          uid: '',
-          username: '',
-          uniqueId: '',
-          nickname: '',
-          signature: '',
-          region: '',
-          avatarThumb: [],
-          avatarMedium: [],
-          url: '',
-        };
-      }
-
-      // Parse music with error handling
-      let music: TiktokMusic;
-      try {
-        music = {
-          id: String(content.music?.id || ''),
-          title: content.music?.title || '',
-          author: content.music?.author || '',
-          album: content.music?.album || '',
-          playUrl: content.music?.play_url?.url_list || [],
-          coverLarge: content.music?.cover_large?.url_list || [],
-          coverMedium: content.music?.cover_medium?.url_list || [],
-          coverThumb: content.music?.cover_thumb?.url_list || [],
-          duration: content.music?.duration || 0,
-          isCommerceMusic: content.music?.is_commerce_music || false,
-          isOriginalSound: content.music?.is_original_sound || false,
-          isAuthorArtist: content.music?.is_author_artist || false,
-        };
-      } catch {
-        music = {
-          id: '',
-          title: '',
-          author: '',
-          album: '',
-          playUrl: [],
-          coverLarge: [],
-          coverMedium: [],
-          coverThumb: [],
-          duration: 0,
-          isCommerceMusic: false,
-          isOriginalSound: false,
-          isAuthorArtist: false,
-        };
-      }
-
-      // Extract video formats with resolution detection
-      const formats = this.extractVideoFormats(content);
-
-      return {
-        content,
-        statistics,
-        author,
-        music,
-        formats,
-      };
-    } catch (error) {
-      console.error('Error fetching TikTok data:', error);
-      return null;
-    }
-  }
-
-  private extractVideoFormats(content: TiktokAwemeItem): TiktokVideoFormat[] {
-    const formats: TiktokVideoFormat[] = [];
-
-    try {
-      const video = content.video;
-      if (!video) return formats;
-
-      const width = video.width || 0;
-      const height = video.height || 0;
-      const ratio = width && height ? width / height : 0.5625;
-
-      // Helper to determine resolution string
-      const getResolution = (w?: number, h?: number): string => {
-        if (!h) return '';
-        if (h >= 2160) return '4K';
-        if (h >= 1440) return '1440p';
-        if (h >= 1080) return '1080p';
-        if (h >= 720) return '720p';
-        if (h >= 540) return '540p';
-        if (h >= 480) return '480p';
-        if (h >= 360) return '360p';
-        return `${h}p`;
-      };
-
-      // Extract play_addr (direct video)
-      if (video.play_addr?.url_list?.length) {
-        const isH265 = video.is_bytevc1 || video.is_h265;
-        formats.push({
-          url: video.play_addr.url_list[0],
-          format_id: 'play_addr',
-          format_note: 'Direct video',
-          width,
-          height,
-          resolution: getResolution(width, height),
-          vcodec: isH265 ? 'h265' : 'h264',
-          acodec: 'aac',
-          filesize: video.play_addr.data_size,
-          quality: 'high',
-        });
-      }
-
-      // Extract download_addr (watermarked)
-      if (video.download_addr?.url_list?.length) {
-        const dlWidth = video.download_addr.width || width;
-        const dlHeight =
-          dlWidth && ratio ? Math.round(dlWidth / ratio) : height;
-        formats.push({
-          url: video.download_addr.url_list[0],
-          format_id: 'download_addr',
-          format_note: 'Download video (watermarked)',
-          width: dlWidth,
-          height: dlHeight,
-          resolution: getResolution(dlWidth, dlHeight),
-          vcodec: 'h264',
-          acodec: 'aac',
-          filesize: video.download_addr.data_size,
-          has_watermark: true,
-          quality: 'medium',
-        });
-      }
-
-      // Extract play_addr_h264 if available
-      if (video.play_addr_h264?.url_list?.length) {
-        formats.push({
-          url: video.play_addr_h264.url_list[0],
-          format_id: 'play_addr_h264',
-          format_note: 'H264 video',
-          width: video.play_addr_h264.width || width,
-          height: video.play_addr_h264.height || height,
-          resolution: getResolution(
-            video.play_addr_h264.width || width,
-            video.play_addr_h264.height || height,
-          ),
-          vcodec: 'h264',
-          acodec: 'aac',
-          filesize: video.play_addr_h264.data_size,
-          quality: 'high',
-        });
-      }
-
-      // Extract play_addr_bytevc1 if available (H265)
-      if (video.play_addr_bytevc1?.url_list?.length) {
-        formats.push({
-          url: video.play_addr_bytevc1.url_list[0],
-          format_id: 'play_addr_bytevc1',
-          format_note: 'H265 video',
-          width: video.play_addr_bytevc1.width || width,
-          height: video.play_addr_bytevc1.height || height,
-          resolution: getResolution(
-            video.play_addr_bytevc1.width || width,
-            video.play_addr_bytevc1.height || height,
-          ),
-          vcodec: 'h265',
-          acodec: 'aac',
-          filesize: video.play_addr_bytevc1.data_size,
-          quality: 'high',
-        });
-      }
-
-      // Extract bit_rate variations (different quality levels)
-      if (Array.isArray(video.bit_rate)) {
-        for (const bitrate of video.bit_rate) {
-          if (bitrate.play_addr?.url_list?.length) {
-            const brWidth = bitrate.play_addr.width || width;
-            const brHeight = bitrate.play_addr.height || height;
-            const isH265 = bitrate.is_bytevc1 || bitrate.is_h265;
-
-            formats.push({
-              url: bitrate.play_addr.url_list[0],
-              format_id: bitrate.gear_name || `bitrate_${bitrate.bit_rate}`,
-              format_note: `${bitrate.gear_name || 'Bitrate'} video`,
-              width: brWidth,
-              height: brHeight,
-              resolution: getResolution(brWidth, brHeight),
-              vcodec: isH265 ? 'h265' : 'h264',
-              acodec: 'aac',
-              bitrate: bitrate.bit_rate,
-              fps: bitrate.FPS,
-              filesize: bitrate.play_addr.data_size,
-              quality: bitrate.quality_type || 'normal',
-            });
-          }
-        }
-      }
-
-      // Sort formats by quality (higher resolution first)
-      formats.sort((a, b) => {
-        const heightA = a.height || 0;
-        const heightB = b.height || 0;
-        if (heightA !== heightB) return heightB - heightA;
-
-        // If same height, prefer non-watermarked
-        if (a.has_watermark !== b.has_watermark) {
-          return a.has_watermark ? 1 : -1;
-        }
-
-        return 0;
-      });
-    } catch (error) {
-      console.error('Error extracting video formats:', error);
-    }
-
-    return formats;
-  }
-
-  private createImageResponse(
-    content: TiktokAwemeItem,
-    author: TiktokAuthor,
-    statistics: TiktokStatistics,
-    music: TiktokMusic,
-  ): TiktokImageResult {
-    try {
-      return {
-        type: 'image',
-        id: content.aweme_id || '',
-        createTime: content.create_time || 0,
-        desc: content.desc || '',
-        isTurnOffComment: content.item_comment_settings === 3,
-        hashtag: Array.isArray(content.text_extra)
-          ? content.text_extra
-              .filter((x: any) => x?.hashtag_name !== undefined)
-              .map((v: any) => v.hashtag_name)
-          : [],
-        isADS: content.is_ads || false,
-        author,
-        statistics,
-        images: Array.isArray(content.image_post_info?.images)
-          ? content.image_post_info.images
-              .map((v: any) => v?.display_image?.url_list?.[0] || '')
-              .filter(Boolean)
-          : [],
-        music,
-      };
-    } catch {
-      return {
-        type: 'image',
-        id: '',
-        createTime: 0,
-        desc: '',
-        isTurnOffComment: false,
-        hashtag: [],
-        isADS: false,
-        author,
-        statistics,
-        images: [],
-        music,
-      };
-    }
-  }
-
-  private createVideoResponse(
-    content: TiktokAwemeItem,
-    author: TiktokAuthor,
-    statistics: TiktokStatistics,
-    music: TiktokMusic,
-    formats?: TiktokVideoFormat[],
-  ): TiktokVideoResult {
-    // Parse video inline with error handling
-    let video: TiktokVideo;
-    try {
-      video = {
-        ratio: content.video?.ratio || '',
-        duration: content.video?.duration || 0,
-        playAddr: content.video?.play_addr?.url_list || [],
-        downloadAddr: content.video?.download_addr?.url_list || [],
-        cover: content.video?.cover?.url_list || [],
-        dynamicCover: content.video?.dynamic_cover?.url_list || [],
-        originCover: content.video?.origin_cover?.url_list || [],
-        formats: formats || [],
-      };
-    } catch {
-      video = {
-        ratio: '',
-        duration: 0,
-        playAddr: [],
-        downloadAddr: [],
-        cover: [],
-        dynamicCover: [],
-        originCover: [],
-        formats: [],
-      };
-    }
-
-    try {
-      return {
-        type: 'video',
-        id: content.aweme_id || '',
-        createTime: content.create_time || 0,
-        desc: content.desc || '',
-        isTurnOffComment: content.item_comment_settings === 3,
-        hashtag: Array.isArray(content.text_extra)
-          ? content.text_extra
-              .filter((x: any) => x?.hashtag_name !== undefined)
-              .map((v: any) => v.hashtag_name)
-          : [],
-        isADS: content.is_ads || false,
-        author,
-        statistics,
-        video,
-        music,
-      };
-    } catch {
-      return {
-        type: 'video',
-        id: '',
-        createTime: 0,
-        desc: '',
-        isTurnOffComment: false,
-        hashtag: [],
-        isADS: false,
-        author,
-        statistics,
-        video,
-        music,
-      };
-    }
-  }
-
-  private async fetchPost(
-    itemId: string,
-    overrides?: RequestOverrides,
-  ): Promise<TiktokPostDetailAPIResponse | null> {
-    const axiosConfig = this.buildAxiosConfig(overrides);
-    const region = this.resolveRegion(overrides);
-    let activeMsToken = this.resolveMsToken(overrides);
-    const retryOptions = this.resolveRetryOptions(overrides?.retryOptions);
-
-    return retry(async (bail) => {
-      try {
-        const params = getPostParams({
-          userAgent: USER_AGENT,
-          region,
-          itemId,
-          msToken: activeMsToken,
-        });
-
-        const signedUrl = signUrl({
-          url: `${TIKTOK_URL}/api/item/detail/`,
-          params,
-          userAgent: USER_AGENT,
-        });
-
         const { data, headers } =
           await this.axios.get<TiktokPostDetailAPIResponse>(
             signedUrl,
@@ -2013,7 +1420,6 @@ export class TikTokClient {
           ...(cookieHeader && { cookie: cookieHeader }),
         },
       });
-
       // Extract msToken from response headers and update if found
       const newMsToken = extractMsToken(headers);
       if (newMsToken) {
@@ -2033,7 +1439,6 @@ export class TikTokClient {
           data: null,
         };
       }
-
       try {
         const jsonData = JSON.parse(scriptMatch[1]);
         const webappUserDetail =
@@ -2060,7 +1465,6 @@ export class TikTokClient {
             data: null,
           };
         }
-
         if (webappUserDetail.statusCode === TiktokError.USER_PRIVATE) {
           return {
             error: 'USER_PRIVATE',
@@ -2088,7 +1492,7 @@ export class TikTokClient {
         };
       } catch (parseError) {
         debug(
-          'Failed to parse JSON from profile page for %s: %s',
+                    'Failed to parse JSON from profile page for %s: %s',
           username,
           parseError,
         );
