@@ -88,7 +88,6 @@ class MediaProcessor {
     const params = [
       "-y", "-fflags", "+genpts", "-i", input,
       "-vf", "scale='min(720,iw)':-2",
-      "-r", "30",
       "-map", "0:v:0", "-map", "0:a:0?",
       "-c:v", "libx264",
       "-preset", "superfast",
@@ -110,7 +109,6 @@ class MediaProcessor {
     const params = [
       "-y", "-fflags", "+genpts", "-i", input,
       "-vf", "scale='min(720,iw)':-2",
-      "-r", "30",
       "-map", "0:v:0", "-map", "0:a:0?",
       "-c:v", "libx264",
       "-preset", "fast",
