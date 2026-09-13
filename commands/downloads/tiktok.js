@@ -28,7 +28,7 @@ function validateTikTokUrl(url) {
 class MediaProcessor {
   constructor(timeout) {
     this.timeout = timeout || 300000;
-    this.threads = "2";
+    this.threads = "4";
   }
 
   execute(args) {
@@ -68,12 +68,12 @@ class MediaProcessor {
       "-map", "0:v:0", "-map", "0:a:0?",
       "-c:v", "libx264",
       "-preset", "ultrafast",
-      "-crf", "18",
-      "-profile:v", "main",
-      "-level", "4.0",
+      "-crf", "16",
+      "-profile:v", "high",
+      "-level", "4.1",
       "-pix_fmt", "yuv420p",
       "-threads", this.threads,
-      "-max_muxing_queue_size", "1024",
+      "-max_muxing_queue_size", "2048",
       "-c:a", "copy",
       "-movflags", "+faststart",
       output
@@ -188,7 +188,7 @@ export default {
       if (statsBefore.size / (1024 * 1024) > 60) {
         actionType = "Optimizado";
         await socket.sendMessage(remoteJid, {
-          text: `⚠️ ${fytBold("Video pesado detectado (>60MB), optimizando para WhatsApp sin perder calidad...")}`,
+          text: `⚠️ ${fytBold("Video pesado detectado (>60MB), optimizando para WhatsApp a máxima velocidad...")}`,
         }, { quoted: message });
 
         try {
