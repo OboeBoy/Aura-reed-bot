@@ -38,11 +38,11 @@ async function DL_TIKTOK(input) {
       const { data } = await axios.get(searchUrl, { timeout: 10000 });
       if (data.status && data.data?.length > 0) targetUrl = data.data[0].url;
     } catch (e) {
-      throw new Error(`Fallo en la búsqueda de TikTok: ${e.message}`);
+      throw new Error(`Fallo en la búsqueda: ${e.message}`);
     }
   }
 
-  if (!targetUrl) throw new Error("No se encontró ningún enlace válido. Asegúrate de enviar un enlace de TikTok correcto.");
+  if (!targetUrl) throw new Error("Enlace no válido o búsqueda sin resultados.");
 
   const APIKEY = global.Apis?.apiAiya?.apikey || "";
   
@@ -51,28 +51,26 @@ async function DL_TIKTOK(input) {
     if (data.status && data.data?.length > 0) {
       return {
         videoUrl: data.data[2]?.url || data.data[0]?.url,
-        title: data.title || "Video sin título",
-        author: data.author?.nickname || "Usuario de TikTok",
+        title: data.title || "Sin título",
+        author: data.author?.nickname || "Desconocido",
       };
     }
-  } catch (e) {
-    console.log("Fallo en API Principal, intentando fallback...", e.message);
-  }
+  } catch (e) {}
 
   try {
     const { data } = await axios.get(`https://api.alyacore.xyz/api/tiktok?url=${encodeURIComponent(targetUrl)}&key=${APIKEY}`, { timeout: 15000 });
     if (data.status && data.data?.video) {
       return {
         videoUrl: data.data.video,
-        title: data.data.title || "Video sin título",
-        author: data.data.author?.nickname || "Usuario de TikTok",
+        title: data.data.title || "Sin título",
+        author: data.data.author?.nickname || "Desconocido",
       };
     }
   } catch (e) {
-    throw new Error(`Ambas APIs de descarga fallaron. Detalle: ${e.message}`);
+    throw new Error(`Servidores inalcanzables: ${e.message}`);
   }
 
-  throw new Error("No se pudo extraer el enlace directo del video. La API devolvió datos vacíos.");
+  throw new Error("No se pudo obtener el medio original.");
 }
 
 async function fastDownload(url, destPath) {
@@ -81,12 +79,12 @@ async function fastDownload(url, destPath) {
       method: "GET",
       url: url,
       responseType: "stream",
-      timeout: 20000,
+      timeout: 25000,
       headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" }
     });
     await pipeline(response.data, fs.createWriteStream(destPath));
   } catch (err) {
-    throw new Error(`La descarga del video se interrumpió: ${err.message}`);
+    throw new Error(`Descarga interrumpida: ${err.message}`);
   }
 }
 
@@ -119,19 +117,19 @@ export default {
       const result = await DL_TIKTOK(text);
       await fastDownload(result.videoUrl, inputPath);
 
-      if (!fs.existsSync(inputPath)) throw new Error("El archivo no se guardó en el disco duro del bot.");
+      if (!fs.existsSync(inputPath)) throw new Error("Fallo de escritura en almacenamiento temporal.");
 
       const initialSizeMB = fs.statSync(inputPath).size / (1024 * 1024);
 
       if (initialSizeMB > MAX_INPUT_MB) {
-        throw new Error(`Video absurdamente pesado (${initialSizeMB.toFixed(1)}MB). El límite son ${MAX_INPUT_MB}MB.`);
+        throw new Error(`Archivo excede límite (${initialSizeMB.toFixed(1)}MB / ${MAX_INPUT_MB}MB).`);
       }
 
       let needsCompression = initialSizeMB > 50;
       let codec = "h264";
 
       try {
-        const { stdout } = await execAsync(`ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 "${inputPath}"`, { maxBuffer: 1024 * 1024 });
+        const { stdout } = await execAsync(`ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 "${inputPath}"`, { timeout: 3000 });
         codec = stdout.trim().toLowerCase();
       } catch (e) { codec = "unknown"; }
 
@@ -140,27 +138,40 @@ export default {
 
       if (codec !== "h264" || needsCompression) {
         if (needsCompression) {
-          await socket.sendMessage(remoteJid, { text: `> ⚡ Comprimiendo video pesado (${initialSizeMB.toFixed(1)}MB)...`, react: { text: "🔥", key: message.key }});
+          await socket.sendMessage(remoteJid, { text: `> ⚡ Comprimiendo (${initialSizeMB.toFixed(1)}MB)...`, react: { text: "🔥", key: message.key }});
         }
 
-        const ffmpegCmd = `ffmpeg -y -i "${inputPath}" -threads 8 -c:v libx264 -preset ultrafast -crf 23 -c:a aac -b:a 128k -movflags +faststart "${finalPath}"`;
-        
+        const cpuCmd = `ffmpeg -y -i "${inputPath}" -threads 4 -c:v libx264 -preset ultrafast -crf 23 -c:a aac -b:a 128k -movflags +faststart "${finalPath}"`;
+        const gpuCmd = `ffmpeg -y -vaapi_device /dev/dri/renderD128 -i "${inputPath}" -vf 'format=nv12,hwupload' -threads 4 -c:v h264_vaapi -qp 23 -c:a aac -b:a 128k -movflags +faststart "${finalPath}"`;
+
         try {
-          await execAsync(ffmpegCmd, { maxBuffer: 1024 * 1024 * 50 });
+          if (fs.existsSync("/dev/dri")) {
+            try {
+              await execAsync(gpuCmd, { timeout: 60000 });
+            } catch (e) {
+              await execAsync(cpuCmd, { timeout: 60000 });
+            }
+          } else {
+            await execAsync(cpuCmd, { timeout: 60000 });
+          }
+
           if (fs.existsSync(finalPath)) {
             pathToSend = finalPath;
             finalSizeMB = fs.statSync(finalPath).size / (1024 * 1024);
           }
         } catch (e) {
-          console.error("Fallo FFmpeg ultrarrápido:", e);
           pathToSend = inputPath; 
         }
       } else {
-        await execAsync(`ffmpeg -y -i "${inputPath}" -threads 8 -c copy -movflags +faststart "${finalPath}"`, { maxBuffer: 1024 * 1024 * 10 });
-        pathToSend = fs.existsSync(finalPath) ? finalPath : inputPath;
+        try {
+          await execAsync(`ffmpeg -y -i "${inputPath}" -threads 4 -c copy -movflags +faststart "${finalPath}"`, { timeout: 15000 });
+          pathToSend = fs.existsSync(finalPath) ? finalPath : inputPath;
+        } catch (e) {
+          pathToSend = inputPath;
+        }
       }
 
-      const shortDesc = result.title.length > 45 ? result.title.substring(0, 45) + "..." : result.title;
+      const shortDesc = result.title.length > 40 ? result.title.substring(0, 40) + "..." : result.title;
       const weightInfo = needsCompression && (finalSizeMB < initialSizeMB) 
         ? `(${initialSizeMB.toFixed(1)}MB ➔ ${finalSizeMB.toFixed(1)}MB) ⚡` 
         : `(${initialSizeMB.toFixed(1)}MB)`;
@@ -177,7 +188,7 @@ export default {
           video: { url: pathToSend },
           caption: caption,
           mimetype: "video/mp4",
-          fileName: "tiktok_fast.mp4",
+          fileName: "tiktok.mp4",
         },
         { quoted: message }
       );
@@ -185,7 +196,6 @@ export default {
       await socket.sendMessage(remoteJid, { react: { text: "✅", key: message.key } });
 
     } catch (error) {
-      console.error("Error en TikTok DL:", error);
       await socket.sendMessage(remoteJid, { react: { text: "❌", key: message.key } });
       await socket.sendMessage(
         remoteJid,
