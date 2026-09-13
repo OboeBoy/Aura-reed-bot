@@ -66,7 +66,6 @@ export default {
       { quoted: m },
     );
 
-    // Medición real de latencia hacia Cloudflare usando ping del sistema (1 paquete, timeout 2s)
     let cfPing = 0;
     try {
       const { stdout } = await execAsync("ping -c 1 -W 2 1.1.1.1", { timeout: 3000 });
@@ -75,11 +74,8 @@ export default {
         cfPing = Math.round(parseFloat(match[1]));
       }
     } catch (e) {
-      // Fallback si la red bloquea ICMP: medimos HTTP rápido a Cloudflare
       cfPing = Math.round(performance.now() - start);
     }
-
-    const botLatency = Math.round(performance.now() - start);
 
     const memory = getMemoryInfo();
     const usedRAM = memory.used;
@@ -114,7 +110,7 @@ export default {
     await sock.sendMessage(
       m.key.remoteJid,
       {
-        text: `⚡ ${fytBold("RESULTADO DE LA PRUEBA")} ⚡\n\n╭━━〔 ${fytBold("AURA REED SYSTEM")} 〕━━⬣\n┃ 🌐 ${fytBold("Ping Cloudflare:")} *${cfPing}ms*\n┃ ⚡ ${fytBold("Velocidad Bot:")} *${botLatency}ms*\n┃ 📶 ${fytBold("Latencia:")} *${status}*\n┃ 📊 ${fytBold("Estado RAM:")} ${ramStatus}\n┃ 🔥 ${fytBold("Sistema:")} *${system}*\n╰━━━━━━━━━━━━━━━━⬣`,
+        text: `⚡ ${fytBold("RESULTADO DE LA PRUEBA")} ⚡\n\n╭━━〔 ${fytBold("AURA REED SYSTEM")} 〕━━⬣\n┃ 🌐 ${fytBold("Latencia:")} *${cfPing}ms*\n┃ 📶 ${fytBold("Estado:")} *${status}*\n┃ 📊 ${fytBold("Estado RAM:")} ${ramStatus}\n┃ 🔥 ${fytBold("Sistema:")} *${system}*\n╰━━━━━━━━━━━━━━━━⬣`,
         edit: key,
       },
       { quoted: m },
