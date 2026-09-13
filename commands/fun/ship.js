@@ -1,1 +1,226 @@
-import { createCanvas } from "@napi-rs/canvas";
+import { createCanvas, loadImage } from "@napi-rs/canvas";
+import { jidNormalizedUser } from "@whiskeysockets/baileys";
+import { resolveLidToRealJid } from "../../models/utils.js";
+import { fytBold } from "../../models/TextStyle.js";
+
+async function getProfilePic(socket, jid) {
+  try {
+    const url = await socket.profilePictureUrl(jid, "image");
+    const res = await fetch(url);
+    if (!res.ok) return null;
+
+    const buffer = Buffer.from(await res.arrayBuffer());
+    return await loadImage(buffer);
+  } catch {
+    return null;
+  }
+}
+
+function drawCircleAvatar(ctx, img, x, y, size) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.clip();
+  if (img) {
+    ctx.drawImage(img, x, y, size, size);
+  } else {
+    ctx.fillStyle = "#888";
+    ctx.fillRect(x, y, size, size);
+  }
+  ctx.restore();
+  ctx.beginPath();
+  ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
+  ctx.lineWidth = 14;
+  ctx.strokeStyle = "#ffffff";
+  ctx.stroke();
+}
+
+function drawHeart(ctx, centerX, centerY, size, fill, stroke, lineWidth) {
+  const half = size / 2;
+  const top = centerY - size * 0.28;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(centerX, centerY + half);
+  ctx.bezierCurveTo(
+    centerX - half * 1.35,
+    centerY - size * 0.12,
+    centerX - half * 0.95,
+    top - size * 0.38,
+    centerX - half * 0.38,
+    top,
+  );
+  ctx.bezierCurveTo(
+    centerX - half * 0.08,
+    top - size * 0.2,
+    centerX,
+    top,
+    centerX,
+    top + size * 0.2,
+  );
+  ctx.bezierCurveTo(
+    centerX,
+    top,
+    centerX + half * 0.08,
+    top - size * 0.2,
+    centerX + half * 0.38,
+    top,
+  );
+  ctx.bezierCurveTo(
+    centerX + half * 0.95,
+    top - size * 0.38,
+    centerX + half * 1.35,
+    centerY - size * 0.12,
+    centerX,
+    centerY + half,
+  );
+  ctx.closePath();
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.lineWidth = lineWidth;
+  ctx.strokeStyle = stroke;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawProgressBar(ctx, x, y, width, height, percent) {
+  const radius = height / 2;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(x, y, width, height, radius);
+  ctx.fillStyle = "#ffffff";
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.roundRect(
+    x + 10,
+    y + 10,
+    Math.max(0, ((width - 20) * percent) / 100),
+    height - 20,
+    radius - 5,
+  );
+  ctx.fillStyle = "#ff0505";
+  ctx.fill();
+  ctx.restore();
+
+  const heartX = x + (width * percent) / 100;
+  drawHeart(ctx, heartX, y + height / 2 - 3, 72, "#ff1010", "#050505", 5);
+}
+
+export default {
+  name: ["ship"],
+  description: "Genera una tarjeta de compatibilidad entre dos usuarios",
+  category: "fun",
+
+  async execute(sock, m, args, { remoteJid, jidRemitente, groupMetadata }) {
+    if (!groupMetadata) {
+      return await sock.sendMessage(
+        remoteJid,
+        { text: "『💘』Este comando solo funciona en grupos." },
+        { quoted: m },
+      );
+    }
+
+    const messageContext = m.message?.extendedTextMessage?.contextInfo;
+    const mentioned = messageContext?.mentionedJid || [];
+    const quotedParticipant = messageContext?.participant;
+
+    let userA = jidNormalizedUser(jidRemitente);
+    let userB = null;
+
+    if (mentioned.length >= 2) {
+      userA = jidNormalizedUser(mentioned[0]);
+      userB = jidNormalizedUser(mentioned[1]);
+    } else if (mentioned.length === 1) {
+      userB = jidNormalizedUser(mentioned[0]);
+    } else if (quotedParticipant) {
+      userB = jidNormalizedUser(quotedParticipant);
+    }
+
+    if (!userB) {
+      return await sock.sendMessage(
+        remoteJid,
+        {
+          text: "『💘』Mencioná a alguien (o respondé su mensaje) para hacer el ship.\n\n*Uso:* .ship @usuario",
+        },
+        { quoted: m },
+      );
+    }
+
+    if (userA === userB) {
+      return await sock.sendMessage(
+        remoteJid,
+        { text: "『💘』No podés hacerte ship con vos mismo, xd." },
+        { quoted: m },
+      );
+    }
+
+    userA = await resolveLidToRealJid(userA, sock, remoteJid);
+    userB = await resolveLidToRealJid(userB, sock, remoteJid);
+
+    const width = 1024;
+    const height = 576;
+    const canvas = createCanvas(width, height);
+    const ctx = canvas.getContext("2d");
+
+    ctx.fillStyle = "#c13cda";
+    ctx.fillRect(0, 0, width, height);
+
+    const avatarSize = 310;
+    const avatarY = 130;
+    const avatarX = 52;
+    const [imgA, imgB] = await Promise.all([
+      getProfilePic(sock, userA),
+      getProfilePic(sock, userB),
+    ]);
+
+    drawCircleAvatar(ctx, imgA, avatarX, avatarY, avatarSize);
+    drawCircleAvatar(
+      ctx,
+      imgB,
+      width - avatarX - avatarSize,
+      avatarY,
+      avatarSize,
+    );
+
+    const percent = Math.floor(Math.random() * 101);
+    const heartCenterY = 407;
+    drawHeart(ctx, width / 2, heartCenterY, 145, "#ff0078", "#050505", 5);
+    ctx.font = "bold 44px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#050505";
+    ctx.fillText(`${percent}%`, width / 2, heartCenterY + 3);
+
+    drawProgressBar(ctx, 65, 487, 894, 78, percent);
+
+    const buffer = canvas.toBuffer("image/png");
+    const numA = userA.split("@")[0];
+    const numB = userB.split("@")[0];
+
+    let result;
+    if (percent >= 80) result = "¡Son el uno para el otro!";
+    else if (percent >= 50) result = "Hay potencial ahí...";
+    else if (percent >= 20) result = "Mejor quedan como amigos.";
+    else result = "Cero compatibilidad, lo siento.";
+
+    const caption =
+      `╭〔 💘 ${fytBold("¿HAY SHIP?")} 〕⬣\n\n` +
+      `┃ @${numA} 💞 @${numB}\n` +
+      `┃ ${fytBold("Porcentaje:")} ${percent}%\n` +
+      `┃ ${result}\n\n` +
+      `╰〔 ⚡ ${fytBold("FUN")} 〕⬣`;
+
+    await sock.sendMessage(
+      remoteJid,
+      {
+        image: buffer,
+        caption,
+        mentions: [userA, userB],
+      },
+      { quoted: m },
+    );
+  },
+};
