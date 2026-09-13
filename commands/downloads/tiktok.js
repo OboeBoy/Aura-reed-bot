@@ -114,7 +114,6 @@ class MediaProcessor {
       "-y", "-i", input,
       "-vf", "scale='min(720,iw)':-2",
       "-r", "30",
-      "-async", "1",
       "-c:v", "libx264",
       "-preset", "superfast",
       "-crf", "24",
@@ -124,6 +123,7 @@ class MediaProcessor {
       "-threads", this.threads,
       "-c:a", "aac",
       "-b:a", "128k",
+      "-shortest",
       "-movflags", "+faststart",
       output
     ];
@@ -135,7 +135,6 @@ class MediaProcessor {
       "-y", "-i", input,
       "-vf", "scale='min(720,iw)':-2",
       "-r", "30",
-      "-async", "1",
       "-c:v", "libx264",
       "-preset", "fast",
       "-crf", "24",
@@ -147,6 +146,7 @@ class MediaProcessor {
       "-threads", this.threads,
       "-c:a", "aac",
       "-b:a", "128k",
+      "-shortest",
       "-movflags", "+faststart",
       output
     ];
