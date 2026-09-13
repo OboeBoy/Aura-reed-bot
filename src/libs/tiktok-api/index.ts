@@ -719,4 +719,38 @@ export class TikTokClient {
         hasMore,
         cursor: lastCursor,
         statusCode: 0,
+        };
+    } catch (err: any) {
+      if (
+        err.status === 400 ||
+        (err.response?.data &&
+          (err.response.data.statusCode === TiktokError.INVALID_ENTITY ||
+            err.response.data.status_code === TiktokError.INVALID_ENTITY))
+      ) {
+        return {
+          error: 'INVALID_ENTITY',
+          statusCode: TiktokError.INVALID_ENTITY,
+          data: null,
+          totalFollowers: 0,
+        };
+      }
+
+      if (err.message === 'EMPTY_RESPONSE') {
+        return {
+          error: 'EMPTY_RESPONSE',
+          statusCode: 0,
+          data: null,
+          totalFollowers: 0,
+        };
+      }
+
+      return {
+        error: 'UNKNOWN_ERROR',
+        statusCode: 0,
+        data: null,
+        totalFollowers: 0,
+      };
+    }
+  }
+}
      
