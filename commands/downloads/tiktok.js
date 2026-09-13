@@ -50,7 +50,7 @@ async function DL_TIKTOK(input) {
     const { data } = await axios.get(`https://api.alyacore.xyz/dl/tiktokv2?url=${encodeURIComponent(targetUrl)}&key=${APIKEY}`, { timeout: 12000 });
     if (data.status && data.data?.length > 0) {
       return {
-        videoUrl: data.data[2]?.url || data.data[0]?.url,
+        videoUrl: data.data[0]?.url || data.data[1]?.url || data.data[2]?.url,
         title: data.title || "Sin título",
         author: data.author?.nickname || "Desconocido",
       };
@@ -80,7 +80,10 @@ async function fastDownload(url, destPath) {
       url: url,
       responseType: "stream",
       timeout: 25000,
-      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" }
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
+        "Referer": "https://www.tiktok.com/"
+      }
     });
     await pipeline(response.data, fs.createWriteStream(destPath));
   } catch (err) {
@@ -117,7 +120,9 @@ export default {
       const result = await DL_TIKTOK(text);
       await fastDownload(result.videoUrl, inputPath);
 
-      if (!fs.existsSync(inputPath)) throw new Error("Fallo de escritura en almacenamiento temporal.");
+      if (!fs.existsSync(inputPath) || fs.statSync(inputPath).size < 10240) {
+        throw new Error("Fallo al guardar o el archivo descargado está corrupto.");
+      }
 
       const initialSizeMB = fs.statSync(inputPath).size / (1024 * 1024);
 
@@ -126,50 +131,30 @@ export default {
       }
 
       let needsCompression = initialSizeMB > 50;
-      let codec = "h264";
-
-      try {
-        const { stdout } = await execAsync(`ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 "${inputPath}"`, { timeout: 3000 });
-        codec = stdout.trim().toLowerCase();
-      } catch (e) { codec = "unknown"; }
-
       let finalSizeMB = initialSizeMB;
       let pathToSend = inputPath;
 
-      if (codec !== "h264" || needsCompression) {
-        if (needsCompression) {
-          await socket.sendMessage(remoteJid, { text: `> ⚡ Comprimiendo (${initialSizeMB.toFixed(1)}MB)...`, react: { text: "🔥", key: message.key }});
-        }
-
-        const cpuCmd = `ffmpeg -y -i "${inputPath}" -threads 4 -c:v libx264 -preset ultrafast -crf 23 -c:a aac -b:a 128k -movflags +faststart "${finalPath}"`;
-        const gpuCmd = `ffmpeg -y -vaapi_device /dev/dri/renderD128 -i "${inputPath}" -vf 'format=nv12,hwupload' -threads 4 -c:v h264_vaapi -qp 23 -c:a aac -b:a 128k -movflags +faststart "${finalPath}"`;
-
-        try {
-          if (fs.existsSync("/dev/dri")) {
-            try {
-              await execAsync(gpuCmd, { timeout: 60000 });
-            } catch (e) {
-              await execAsync(cpuCmd, { timeout: 60000 });
-            }
-          } else {
-            await execAsync(cpuCmd, { timeout: 60000 });
-          }
-
-          if (fs.existsSync(finalPath)) {
-            pathToSend = finalPath;
-            finalSizeMB = fs.statSync(finalPath).size / (1024 * 1024);
-          }
-        } catch (e) {
-          pathToSend = inputPath; 
+      if (needsCompression) {
+        await socket.sendMessage(remoteJid, { text: `> ⚡ Comprimiendo (${initialSizeMB.toFixed(1)}MB)...`, react: { text: "🔥", key: message.key } });
+        const cpuCmd = `ffmpeg -y -i "${inputPath}" -threads 2 -c:v libx264 -pix_fmt yuv420p -preset ultrafast -crf 26 -c:a aac -b:a 128k -movflags +faststart "${finalPath}"`;
+        await execAsync(cpuCmd, { timeout: 60000 });
+        if (fs.existsSync(finalPath) && fs.statSync(finalPath).size > 1024) {
+          pathToSend = finalPath;
+          finalSizeMB = fs.statSync(finalPath).size / (1024 * 1024);
         }
       } else {
+        const remuxCmd = `ffmpeg -y -i "${inputPath}" -c copy -movflags +faststart "${finalPath}"`;
         try {
-          await execAsync(`ffmpeg -y -i "${inputPath}" -threads 4 -c copy -movflags +faststart "${finalPath}"`, { timeout: 15000 });
-          pathToSend = fs.existsSync(finalPath) ? finalPath : inputPath;
+          await execAsync(remuxCmd, { timeout: 15000 });
+          if (fs.existsSync(finalPath) && fs.statSync(finalPath).size > 1024) {
+            pathToSend = finalPath;
+          }
         } catch (e) {
           pathToSend = inputPath;
         }
       }
+
+      const videoBuffer = fs.readFileSync(pathToSend);
 
       const shortDesc = result.title.length > 40 ? result.title.substring(0, 40) + "..." : result.title;
       const weightInfo = needsCompression && (finalSizeMB < initialSizeMB) 
@@ -185,7 +170,7 @@ export default {
       await socket.sendMessage(
         remoteJid,
         {
-          video: { url: pathToSend },
+          video: videoBuffer,
           caption: caption,
           mimetype: "video/mp4",
           fileName: "tiktok.mp4",
