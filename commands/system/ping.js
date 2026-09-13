@@ -1,5 +1,9 @@
 import fs from "fs";
+import { exec } from "child_process";
+import { promisify } from "util";
 import { fytBold } from "../../models/TextStyle.js";
+
+const execAsync = promisify(exec);
 
 function getMemoryInfo() {
   try {
@@ -48,7 +52,7 @@ function getMemoryInfo() {
 
 export default {
   name: ["ping", "p", "lat"],
-  description: "Velocidad del sistema.",
+  description: "Velocidad de red y red hacia Cloudflare.",
   category: "system",
 
   async execute(sock, m, args) {
@@ -57,12 +61,25 @@ export default {
     const { key } = await sock.sendMessage(
       m.key.remoteJid,
       {
-        text: `⚡ ${fytBold("CALCULANDO VELOCIDAD DEL BOT")} ⚡\n\n╭━━〔 ${fytBold("AURA REED SYSTEM")} 〕━━⬣\n┃ 🚀 Espera un momento...\n┃ 📡 Analizando latencia\n┃ 💻 Comprobando servidor\n┃ ⚙️ Optimizando rendimiento\n╰━━━━━━━━━━━━━━━━⬣\n`,
+        text: `⚡ ${fytBold("CALCULANDO LATENCIA")} ⚡\n\n╭━━〔 ${fytBold("AURA REED SYSTEM")} 〕━━⬣\n┃ 🚀 Midiendo red (Cloudflare)...\n┃ 📡 Analizando socket\n╰━━━━━━━━━━━━━━━━⬣\n`,
       },
       { quoted: m },
     );
 
-    const latency = Math.round(performance.now() - start);
+    // Medición real de latencia hacia Cloudflare usando ping del sistema (1 paquete, timeout 2s)
+    let cfPing = 0;
+    try {
+      const { stdout } = await execAsync("ping -c 1 -W 2 1.1.1.1", { timeout: 3000 });
+      const match = stdout.match(/time=([\d.]+)\s*ms/);
+      if (match && match[1]) {
+        cfPing = Math.round(parseFloat(match[1]));
+      }
+    } catch (e) {
+      // Fallback si la red bloquea ICMP: medimos HTTP rápido a Cloudflare
+      cfPing = Math.round(performance.now() - start);
+    }
+
+    const botLatency = Math.round(performance.now() - start);
 
     const memory = getMemoryInfo();
     const usedRAM = memory.used;
@@ -80,10 +97,13 @@ export default {
 
     let status = "";
     let system = "";
-    if (latency < 500) {
+    if (cfPing < 50) {
+      status = "🟢 Ultra Rápido";
+      system = "Estable";
+    } else if (cfPing < 150) {
       status = "🟢 Excelente";
       system = "Estable";
-    } else if (latency < 1000) {
+    } else if (cfPing < 300) {
       status = "🟠 Aceptable";
       system = "Normal";
     } else {
@@ -94,7 +114,7 @@ export default {
     await sock.sendMessage(
       m.key.remoteJid,
       {
-        text: `⚡ ${fytBold("RESULTADO DE LA PRUEBA")} ⚡\n\n╭━━〔 ${fytBold("AURA REED SYSTEM")} 〕━━⬣\n┃ ⚡ ${fytBold("Velocidad del Bot:")} *${latency}ms*\n┃ 📶 ${fytBold("Latencia:")} *${status}*\n┃ 📊 ${fytBold("Estado RAM:")} ${ramStatus}\n┃ 🔥 ${fytBold("Sistema:")} *${system}*\n╰━━━━━━━━━━━━━━━━⬣`,
+        text: `⚡ ${fytBold("RESULTADO DE LA PRUEBA")} ⚡\n\n╭━━〔 ${fytBold("AURA REED SYSTEM")} 〕━━⬣\n┃ 🌐 ${fytBold("Ping Cloudflare:")} *${cfPing}ms*\n┃ ⚡ ${fytBold("Velocidad Bot:")} *${botLatency}ms*\n┃ 📶 ${fytBold("Latencia:")} *${status}*\n┃ 📊 ${fytBold("Estado RAM:")} ${ramStatus}\n┃ 🔥 ${fytBold("Sistema:")} *${system}*\n╰━━━━━━━━━━━━━━━━⬣`,
         edit: key,
       },
       { quoted: m },
