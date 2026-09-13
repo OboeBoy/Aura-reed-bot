@@ -51,6 +51,55 @@ class MediaProcessor {
     });
   }
 
+  verifyIntegrity(input) {
+    return new Promise((resolve) => {
+      const proc = spawn("ffprobe", [
+        "-v", "error",
+        "-select_streams", "v:0",
+        "-show_entries", "stream=codec_name,pix_fmt,level,duration",
+        "-of", "json",
+        input
+      ]);
+      let out = "";
+      proc.stdout.on("data", (d) => out += d.toString());
+      proc.on("close", () => {
+        try {
+          const parsed = JSON.parse(out);
+          const stream = parsed.streams && parsed.streams[0];
+          if (!stream) {
+            resolve({ safe: false, duration: 0 });
+            return;
+          }
+          const codec = (stream.codec_name || "").toLowerCase();
+          const pixFmt = (stream.pix_fmt || "").toLowerCase();
+          const level = Number(stream.level || 30);
+          const duration = parseFloat(stream.duration || 0);
+
+          const isH264 = codec === "h264";
+          const isSafeColor = pixFmt.includes("yuv420p") || pixFmt.includes("yuvj420p");
+          const isSafeLevel = level <= 41;
+
+          resolve({ safe: isH264 && isSafeColor && isSafeLevel, duration });
+        } catch (e) {
+          resolve({ safe: false, duration: 0 });
+        }
+      });
+      proc.on("error", () => resolve({ safe: false, duration: 0 }));
+    });
+  }
+
+  async remuxClean(input, output, duration) {
+    const params = [
+      "-y", "-fflags", "+genpts", "-i", input,
+      "-map", "0:v:0", "-map", "0:a:0?",
+      "-c", "copy",
+      ...(duration > 0 ? ["-t", String(duration)] : []),
+      "-movflags", "+faststart",
+      output
+    ];
+    await this.execute(params);
+  }
+
   async patchStream(input, output) {
     const params = [
       "-y", "-fflags", "+genpts", "-i", input,
@@ -217,14 +266,30 @@ export default {
           await mediaProcessor.transcode(inputP, outP);
           finalPath = outP;
         } catch (e) {
-          console.log(e.message);
+          try {
+            await mediaProcessor.patchStream(inputP, outP);
+            finalPath = outP;
+          } catch (err) {
+            console.log(err.message);
+          }
         }
       } else {
         try {
-          await mediaProcessor.patchStream(inputP, outP);
-          finalPath = outP;
+          const integrity = await mediaProcessor.verifyIntegrity(inputP);
+          if (integrity.safe) {
+            await mediaProcessor.remuxClean(inputP, outP, integrity.duration);
+            finalPath = outP;
+          } else {
+            await mediaProcessor.patchStream(inputP, outP);
+            finalPath = outP;
+          }
         } catch (e) {
-          console.log(e.message);
+          try {
+            await mediaProcessor.patchStream(inputP, outP);
+            finalPath = outP;
+          } catch (err) {
+            console.log(err.message);
+          }
         }
       }
 
