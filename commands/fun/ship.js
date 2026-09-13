@@ -113,7 +113,7 @@ export default {
   description: "Genera una tarjeta de compatibilidad entre dos usuarios",
   category: "fun",
 
-  async execute(sock, m, args, { remoteJid, jidRemitente, groupMetadata }) {
+  execute: async(sock, m, args, { remoteJid, jidRemitente, groupMetadata }) => {
     if (!groupMetadata) {
       return await sock.sendMessage(
         remoteJid,
