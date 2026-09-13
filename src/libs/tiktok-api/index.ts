@@ -43,4 +43,3 @@ export type {
   TiktokUserPostsResponse,
 } from './api/getUserPosts/types.ts';
 export { PostItemRequestType } from './api/getUserPosts/types.ts';
-export { TiktokError } from '../../constants/errors.ts';
