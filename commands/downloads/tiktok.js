@@ -162,6 +162,7 @@ export default {
       let pathToSend = inputPath;
 
       if (initialSizeMB > RAW_LIMIT_MB) {
+        // Videos pesados: Compresión mínima imperceptible orientada a tasa de bits original
         isCompressed = true;
         await socket.sendMessage(remoteJid, { text: `> ⚡ Optimizando tamaño (${initialSizeMB.toFixed(1)}MB)...`, react: { text: "🔥", key: message.key } });
 
@@ -171,8 +172,8 @@ export default {
           originalBitrate = parseInt(stdout.trim(), 10);
         } catch (e) {}
 
-        const targetBitrate = originalBitrate > 0 ? Math.floor(originalBitrate * 0.92) : 0;
-        const bitrateArg = targetBitrate > 0 ? `-b:v ${targetBitrate} -maxrate ${Math.floor(targetBitrate * 1.1)} -bufsize ${Math.floor(targetBitrate * 1.5)}` : `-crf 17`;
+        const targetBitrate = originalBitrate > 0 ? Math.floor(originalBitrate * 0.95) : 0;
+        const bitrateArg = targetBitrate > 0 ? `-b:v ${targetBitrate} -maxrate ${Math.floor(targetBitrate * 1.05)} -bufsize ${Math.floor(targetBitrate * 1.5)}` : `-crf 18`;
 
         const renderCmd = `ffmpeg -y -i "${inputPath}" -threads 2 -c:v libx264 -pix_fmt yuv420p -preset fast ${bitrateArg} -c:a copy -movflags +faststart "${finalPath}"`;
         await execAsync(renderCmd, { timeout: 120000 });
@@ -180,6 +181,18 @@ export default {
         if (fs.existsSync(finalPath) && fs.statSync(finalPath).size > 1024) {
           pathToSend = finalPath;
           finalSizeMB = fs.statSync(finalPath).size / (1024 * 1024);
+        }
+      } else {
+        // Videos menores a 60MB: Copia directa de streams (CRURO/RAW) pero arreglando metadatos para Baileys
+        try {
+          const fixCmd = `ffmpeg -y -i "${inputPath}" -c copy -movflags +faststart "${finalPath}"`;
+          await execAsync(fixCmd, { timeout: 30000 });
+          if (fs.existsSync(finalPath) && fs.statSync(finalPath).size > 1024) {
+            pathToSend = finalPath;
+          }
+        } catch (e) {
+          // Si falla el reempaquetado rápido, usamos el archivo original tal cual
+          pathToSend = inputPath;
         }
       }
 
