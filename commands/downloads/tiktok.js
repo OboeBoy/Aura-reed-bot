@@ -169,7 +169,7 @@ export default {
 
     if (!text) {
       return await socket.sendMessage(remoteJid, {
-        text: `╭〔 ⚠️ ${fytBold("AURA REED")} 〕⬣\n┃ ❌ ${fytBold("FALTA BÚSQUEDA")}\n╰━━━━━━━━━━━━⬣\n\n┃ > Por favor, proporciona una búsqueda o\n┃ > un enlace válido de TikTok.\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣`,
+        text: `⚡ ${fytBold("Falta enlace o búsqueda de TikTok.")}`,
       }, { quoted: message });
     }
 
@@ -183,24 +183,21 @@ export default {
       const result = await getTikTokData(text);
       await downloadToFile(result.video_dl, inputP);
 
-      const stats = await fsPromises.stat(inputP);
-      const sizeMB = stats.size / (1024 * 1024);
+      const statsBefore = await fsPromises.stat(inputP);
+      const originalSizeMB = (statsBefore.size / (1024 * 1024)).toFixed(2);
 
-      if (sizeMB > MAX_INPUT_MB) {
+      if (statsBefore.size / (1024 * 1024) > MAX_INPUT_MB) {
         socket.sendMessage(remoteJid, { react: { text: "❌", key: message.key } }).catch(() => {});
         return await socket.sendMessage(remoteJid, {
-          text: `😦 ¡Mae Ponete serio! 💀🙏\n Este video pesa más que una vieja de Kilos Mortales.`,
+          text: `⚠️ ${fytBold("El video supera el límite de peso permitido.")}`,
         }, { quoted: message });
       }
 
       let finalPath = inputP;
+      let actionType = "Original";
 
-      if (sizeMB > 60) {
-        socket.sendMessage(remoteJid, { react: { text: "⚠️", key: message.key } }).catch(() => {});
-        await socket.sendMessage(remoteJid, {
-          text: `¡Uy mae! Este video pesa mucho, lo estoy optimizando sin perder calidad...\nDame chance.`,
-        }, { quoted: message });
-
+      if (statsBefore.size / (1024 * 1024) > 60) {
+        actionType = "Optimizado";
         try {
           await mediaProcessor.transcode(inputP, outP);
           finalPath = outP;
@@ -213,19 +210,13 @@ export default {
         finalPath = outP;
       }
 
-      let caption = `╭〔 🎥 ${fytBold("TIKTOK VIDEO")} 〕━⬣\n\n`;
-      caption += `┃ ➥ ${fytBold(result.title)}\n\n`;
-      caption += `┣━━━━━━━━━━━━⬣\n`;
-      caption += `┃ > ${fytBold("Autor")} › ${result.authorNick}\n`;
-      caption += `┃ > ${fytBold("Fecha")} › ${result.time}\n`;
-      caption += `┃ > ${fytBold("Vistas")} › ${result.views}\n`;
-      caption += `┃ > ${fytBold("Likes")} › ${result.likes}\n`;
-      caption += `┃ > ${fytBold("Comentarios")} › ${result.comments}\n`;
-      caption += `┃ > ${fytBold("Favoritos")} › ${result.collect}\n`;
-      caption += `┃ > ${fytBold("Compartidos")} › ${result.shares}\n`;
-      caption += `┣━━━━━━━━━━━━⬣\n`;
-      caption += `┃ > ${fytBold("Url")} › ${result.tk_url}\n`;
-      caption += `╰〔 ⚡ ${fytBold("SYSTEM ACTIVE")} 〕⬣`;
+      const statsAfter = await fsPromises.stat(finalPath);
+      const finalSizeMB = (statsAfter.size / (1024 * 1024)).toFixed(2);
+
+      let caption = `🎬 ${fytBold(result.title)}\n\n`;
+      caption += `👤 ${result.authorNick} | 👀 ${result.views} | ❤️ ${result.likes}\n`;
+      caption += `📦 Peso: ${originalSizeMB}MB ➔ ${finalSizeMB}MB (${actionType})\n`;
+      caption += `🔗 ${result.tk_url}`;
 
       await socket.sendMessage(remoteJid, {
         video: { url: finalPath },
@@ -244,7 +235,7 @@ export default {
       socket.sendMessage(remoteJid, { react: { text: "❌", key: message.key } }).catch(() => {});
       const errorMsg = error.message || "Ocurrió un error inesperado.";
       await socket.sendMessage(remoteJid, {
-        text: `╭〔 ❌ ${fytBold("AURA REED")} 〕⬣\n┃ ⚠️ ${fytBold("ERROR REAL")}\n╰━━━━━━━━━━━━⬣\n\n┃ > ${errorMsg}\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣`,
+        text: `❌ ${fytBold("Error:")} ${errorMsg}`,
       }, { quoted: message });
 
     } finally {
