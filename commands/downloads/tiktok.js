@@ -28,7 +28,7 @@ function validateTikTokUrl(url) {
 class MediaProcessor {
   constructor(timeout) {
     this.timeout = timeout || 300000;
-    this.threads = "1";
+    this.threads = "2";
   }
 
   execute(args) {
@@ -65,18 +65,16 @@ class MediaProcessor {
   async transcode(input, output) {
     const params = [
       "-y", "-fflags", "+genpts", "-i", input,
-      "-vf", "scale='min(1080,iw)':-2",
       "-map", "0:v:0", "-map", "0:a:0?",
       "-c:v", "libx264",
-      "-preset", "veryfast",
-      "-crf", "19",
+      "-preset", "ultrafast",
+      "-crf", "18",
       "-profile:v", "main",
       "-level", "4.0",
       "-pix_fmt", "yuv420p",
       "-threads", this.threads,
       "-max_muxing_queue_size", "1024",
-      "-c:a", "aac",
-      "-b:a", "192k",
+      "-c:a", "copy",
       "-movflags", "+faststart",
       output
     ];
@@ -156,8 +154,6 @@ async function downloadToFile(url, destPath) {
   await pipeline(response.data, writer); 
 }
 
-const MAX_INPUT_MB = 500;
-
 export default {
   name: ["tk", "tt", "ttv", "tiktok", "tkmp4"],
   category: "downloads",
@@ -186,18 +182,15 @@ export default {
       const statsBefore = await fsPromises.stat(inputP);
       const originalSizeMB = (statsBefore.size / (1024 * 1024)).toFixed(2);
 
-      if (statsBefore.size / (1024 * 1024) > MAX_INPUT_MB) {
-        socket.sendMessage(remoteJid, { react: { text: "❌", key: message.key } }).catch(() => {});
-        return await socket.sendMessage(remoteJid, {
-          text: `⚠️ ${fytBold("El video supera el límite de peso permitido.")}`,
-        }, { quoted: message });
-      }
-
       let finalPath = inputP;
       let actionType = "Original";
 
       if (statsBefore.size / (1024 * 1024) > 60) {
         actionType = "Optimizado";
+        await socket.sendMessage(remoteJid, {
+          text: `⚠️ ${fytBold("Video pesado detectado (>60MB), optimizando para WhatsApp sin perder calidad...")}`,
+        }, { quoted: message });
+
         try {
           await mediaProcessor.transcode(inputP, outP);
           finalPath = outP;
