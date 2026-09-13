@@ -105,7 +105,7 @@ async function fastDownload(url, destPath) {
       method: "GET",
       url: url,
       responseType: "stream",
-      timeout: 45000,
+      timeout: 60000,
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Referer": "https://www.tiktok.com/"
@@ -117,8 +117,7 @@ async function fastDownload(url, destPath) {
   }
 }
 
-const MAX_INPUT_MB = 450;
-const RAW_LIMIT_MB = 60;
+const MAX_LIMIT_MB = 450;
 
 export default {
   name: ["tk", "tt", "ttv", "tiktok", "tkmp4"],
@@ -153,53 +152,27 @@ export default {
 
       const initialSizeMB = fs.statSync(inputPath).size / (1024 * 1024);
 
-      if (initialSizeMB > MAX_INPUT_MB) {
-        throw new Error(`Archivo excede límite (${initialSizeMB.toFixed(1)}MB / ${MAX_INPUT_MB}MB).`);
+      if (initialSizeMB > MAX_LIMIT_MB) {
+        throw new Error(`Archivo excede el límite de ${MAX_LIMIT_MB}MB (${initialSizeMB.toFixed(1)}MB).`);
       }
 
-      let isCompressed = false;
-      let finalSizeMB = initialSizeMB;
       let pathToSend = inputPath;
 
-      if (initialSizeMB > RAW_LIMIT_MB) {
-        isCompressed = true;
-        await socket.sendMessage(remoteJid, { text: `> ⚡ Optimizando tamaño (${initialSizeMB.toFixed(1)}MB)...`, react: { text: "🔥", key: message.key } });
-
-        let originalBitrate = 0;
-        try {
-          const { stdout } = await execAsync(`ffprobe -v error -select_streams v:0 -show_entries stream=bit_rate -of default=noprint_wrappers=1:nokey=1 "${inputPath}"`);
-          originalBitrate = parseInt(stdout.trim(), 10);
-        } catch (e) {}
-
-        const safeBitrate = (originalBitrate > 0 && originalBitrate < 30000000) ? originalBitrate : 8000000;
-        const targetBitrate = Math.floor(safeBitrate * 0.92);
-        const bitrateArg = `-b:v ${targetBitrate} -maxrate ${Math.floor(targetBitrate * 1.1)} -bufsize ${Math.floor(targetBitrate * 1.5)}`;
-
-        const renderCmd = `ffmpeg -y -i "${inputPath}" -threads 4 -c:v libx264 -pix_fmt yuv420p -preset ultrafast ${bitrateArg} -r 60 -c:a copy -movflags +faststart "${finalPath}"`;
-        await execAsync(renderCmd, { timeout: 240000 });
-
+      try {
+        const fixCmd = `ffmpeg -y -i "${inputPath}" -c copy -movflags +faststart "${finalPath}"`;
+        await execAsync(fixCmd, { timeout: 60000 });
         if (fs.existsSync(finalPath) && fs.statSync(finalPath).size > 1024) {
           pathToSend = finalPath;
-          finalSizeMB = fs.statSync(finalPath).size / (1024 * 1024);
         }
-      } else {
-        try {
-          const fixCmd = `ffmpeg -y -i "${inputPath}" -c copy -movflags +faststart "${finalPath}"`;
-          await execAsync(fixCmd, { timeout: 30000 });
-          if (fs.existsSync(finalPath) && fs.statSync(finalPath).size > 1024) {
-            pathToSend = finalPath;
-          }
-        } catch (e) {
-          pathToSend = inputPath;
-        }
+      } catch (e) {
+        pathToSend = inputPath;
       }
 
+      const finalSizeMB = fs.statSync(pathToSend).size / (1024 * 1024);
       const videoBuffer = fs.readFileSync(pathToSend);
 
       const shortDesc = result.title.length > 40 ? result.title.substring(0, 40) + "..." : result.title;
-      const weightInfo = isCompressed 
-        ? `(${initialSizeMB.toFixed(1)}MB ➔ ${finalSizeMB.toFixed(1)}MB) [HQ-COMPRESS]` 
-        : `(${initialSizeMB.toFixed(1)}MB) [RAW ORIGINAL]`;
+      const weightInfo = `(${finalSizeMB.toFixed(1)}MB) [CALIDAD ORIGINAL NATIVA]`;
 
       let caption = `╭〔 🎥 ${fytBold("TIKTOK")} 〕⬣\n`;
       caption += `┃ 👤 ${fytBold("Por:")} ${result.author}\n`;
