@@ -69,7 +69,7 @@ async function DL_TIKTOK(input) {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         Accept: "application/json, text/plain, */*",
       },
-      timeout: 15000,
+      timeout: 150000,
     });
 
     if (!data.status && data.message) {
