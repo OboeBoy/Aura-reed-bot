@@ -105,7 +105,7 @@ async function fastDownload(url, destPath) {
       method: "GET",
       url: url,
       responseType: "stream",
-      timeout: 60000,
+      timeout: 90000,
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Referer": "https://www.tiktok.com/"
@@ -117,12 +117,10 @@ async function fastDownload(url, destPath) {
   }
 }
 
-const MAX_LIMIT_MB = 450;
-
 export default {
   name: ["tk", "tt", "ttv", "tiktok", "tkmp4"],
   category: "downloads",
-  description: "Descarga videos de TikTok en alta calidad.",
+  description: "Descarga videos de TikTok en alta calidad sin límite de peso y optimizados.",
 
   execute: async (socket, message, args) => {
     const remoteJid = message.key.remoteJid;
@@ -152,60 +150,35 @@ export default {
 
       const initialSizeMB = fs.statSync(inputPath).size / (1024 * 1024);
 
-      if (initialSizeMB > MAX_LIMIT_MB) {
-        throw new Error(`Archivo excede el límite de ${MAX_LIMIT_MB}MB (${initialSizeMB.toFixed(1)}MB).`);
-      }
+      await socket.sendMessage(remoteJid, { text: `> ⚡ Optimizando video (${initialSizeMB.toFixed(1)}MB)...`, react: { text: "🔥", key: message.key } });
 
       let pathToSend = inputPath;
-      let isCompressed = false;
-      let finalSizeMB = initialSizeMB;
-
-      // Determinamos el factor de escala según el tamaño para evitar que falle en WhatsApp por peso excesivo
-      let scaleFactor = 1.0;
-      if (initialSizeMB > 150) {
-        scaleFactor = 0.94; // 94% del bitrate original
-        isCompressed = true;
-      } else if (initialSizeMB > 130) {
-        scaleFactor = 0.95; // 95% del bitrate original
-        isCompressed = true;
-      }
 
       try {
-        if (isCompressed) {
-          let originalBitrate = 0;
-          try {
-            const { stdout } = await execAsync(`ffprobe -v error -select_streams v:0 -show_entries stream=bit_rate -of default=noprint_wrappers=1:nokey=1 "${inputPath}"`);
-            originalBitrate = parseInt(stdout.trim(), 10);
-          } catch (e) {}
+        let originalBitrate = 0;
+        try {
+          const { stdout } = await execAsync(`ffprobe -v error -select_streams v:0 -show_entries stream=bit_rate -of default=noprint_wrappers=1:nokey=1 "${inputPath}"`);
+          originalBitrate = parseInt(stdout.trim(), 10);
+        } catch (e) {}
 
-          const targetBitrate = originalBitrate > 0 ? Math.floor(originalBitrate * scaleFactor) : 0;
-          const bitrateArg = targetBitrate > 0 ? `-b:v ${targetBitrate} -maxrate ${Math.floor(targetBitrate * 1.05)} -bufsize ${Math.floor(targetBitrate * 1.5)}` : `-crf 16`;
+        const targetBitrate = originalBitrate > 0 ? Math.floor(originalBitrate * 0.82) : 0;
+        const bitrateArg = targetBitrate > 0 ? `-b:v ${targetBitrate} -maxrate ${Math.floor(targetBitrate * 1.1)} -bufsize ${Math.floor(targetBitrate * 1.5)}` : `-crf 20`;
 
-          const renderCmd = `ffmpeg -y -i "${inputPath}" -threads 4 -c:v libx264 -pix_fmt yuv420p -preset veryfast ${bitrateArg} -c:a copy -movflags +faststart "${finalPath}"`;
-          await execAsync(renderCmd, { timeout: 180000 });
+        const renderCmd = `ffmpeg -y -i "${inputPath}" -threads 4 -c:v libx264 -pix_fmt yuv420p -preset fast ${bitrateArg} -c:a aac -b:a 128k -movflags +faststart "${finalPath}"`;
+        await execAsync(renderCmd, { timeout: 360000 });
 
-          if (fs.existsSync(finalPath) && fs.statSync(finalPath).size > 1024) {
-            pathToSend = finalPath;
-          }
-        } else {
-          // Menor o igual a 130MB: RAW / Copia limpia de contenedor con reindexado de metadatos
-          const fixCmd = `ffmpeg -y -i "${inputPath}" -c copy -movflags +faststart "${finalPath}"`;
-          await execAsync(fixCmd, { timeout: 60000 });
-          if (fs.existsSync(finalPath) && fs.statSync(finalPath).size > 1024) {
-            pathToSend = finalPath;
-          }
+        if (fs.existsSync(finalPath) && fs.statSync(finalPath).size > 1024) {
+          pathToSend = finalPath;
         }
       } catch (e) {
         pathToSend = inputPath;
       }
 
-      finalSizeMB = fs.statSync(pathToSend).size / (1024 * 1024);
+      const finalSizeMB = fs.statSync(pathToSend).size / (1024 * 1024);
       const videoBuffer = fs.readFileSync(pathToSend);
 
       const shortDesc = result.title.length > 40 ? result.title.substring(0, 40) + "..." : result.title;
-      const weightInfo = isCompressed 
-        ? `(${initialSizeMB.toFixed(1)}MB ➔ ${finalSizeMB.toFixed(1)}MB) [COMPRESIÓN SUAVE]` 
-        : `(${finalSizeMB.toFixed(1)}MB) [RAW ORIGINAL]`;
+      const weightInfo = `(${initialSizeMB.toFixed(1)}MB ➔ ${finalSizeMB.toFixed(1)}MB) [OPTIMIZADO HQ]`;
 
       let caption = `╭〔 🎥 ${fytBold("TIKTOK")} 〕⬣\n`;
       caption += `┃ 👤 ${fytBold("Por:")} ${result.author}\n`;
@@ -213,7 +186,6 @@ export default {
       caption += `┃ 📦 ${fytBold("Peso:")} ${weightInfo}\n`;
       caption += `╰━━━━━━━━━━━━━━⬣`;
 
-      // Se inyecta directamente como video en Baileys sin importar el peso grande
       await socket.sendMessage(
         remoteJid,
         {
