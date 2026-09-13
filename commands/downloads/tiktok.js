@@ -113,6 +113,8 @@ class MediaProcessor {
     const params = [
       "-y", "-i", input,
       "-vf", "scale='min(720,iw)':-2",
+      "-r", "30",
+      "-async", "1",
       "-c:v", "libx264",
       "-preset", "superfast",
       "-crf", "24",
@@ -132,6 +134,8 @@ class MediaProcessor {
     const params = [
       "-y", "-i", input,
       "-vf", "scale='min(720,iw)':-2",
+      "-r", "30",
+      "-async", "1",
       "-c:v", "libx264",
       "-preset", "fast",
       "-crf", "24",
