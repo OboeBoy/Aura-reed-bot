@@ -91,7 +91,7 @@ class MediaProcessor {
     const params = [
       "-y", "-i", input,
       "-c:v", "libx264",
-      "-preset", "fast",
+      "-preset", "ultrafast",
       "-crf", "20",
       "-maxrate", "2M",
       "-bufsize", "2M",
