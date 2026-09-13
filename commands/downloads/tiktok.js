@@ -90,7 +90,7 @@ async function fastDownload(url, destPath) {
   }
 }
 
-const MAX_INPUT_MB = 200;
+const MAX_INPUT_MB = 250;
 
 export default {
   name: ["tk", "tt", "ttv", "tiktok", "tkmp4"],
@@ -131,7 +131,7 @@ export default {
       let codec = "h264";
 
       try {
-        const { stdout } = await execAsync(`ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 "${inputPath}"`);
+        const { stdout } = await execAsync(`ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 "${inputPath}"`, { maxBuffer: 1024 * 1024 });
         codec = stdout.trim().toLowerCase();
       } catch (e) { codec = "unknown"; }
 
@@ -143,10 +143,10 @@ export default {
           await socket.sendMessage(remoteJid, { text: `> ⚡ Comprimiendo video pesado (${initialSizeMB.toFixed(1)}MB)...`, react: { text: "🔥", key: message.key }});
         }
 
-        const ffmpegCmd = `ffmpeg -y -i "${inputPath}" -c:v libx264 -preset ultrafast -crf 23 -c:a aac -b:a 128k -movflags +faststart "${finalPath}"`;
+        const ffmpegCmd = `ffmpeg -y -i "${inputPath}" -threads 8 -c:v libx264 -preset ultrafast -crf 23 -c:a aac -b:a 128k -movflags +faststart "${finalPath}"`;
         
         try {
-          await execAsync(ffmpegCmd, { maxBuffer: 1024 * 1024 * 5 });
+          await execAsync(ffmpegCmd, { maxBuffer: 1024 * 1024 * 50 });
           if (fs.existsSync(finalPath)) {
             pathToSend = finalPath;
             finalSizeMB = fs.statSync(finalPath).size / (1024 * 1024);
@@ -156,7 +156,7 @@ export default {
           pathToSend = inputPath; 
         }
       } else {
-        await execAsync(`ffmpeg -y -i "${inputPath}" -c copy -movflags +faststart "${finalPath}"`, { maxBuffer: 1024 * 1024 * 2 });
+        await execAsync(`ffmpeg -y -i "${inputPath}" -threads 8 -c copy -movflags +faststart "${finalPath}"`, { maxBuffer: 1024 * 1024 * 10 });
         pathToSend = fs.existsSync(finalPath) ? finalPath : inputPath;
       }
 
