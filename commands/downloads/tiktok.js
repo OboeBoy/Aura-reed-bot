@@ -105,7 +105,7 @@ async function fastDownload(url, destPath) {
       method: "GET",
       url: url,
       responseType: "stream",
-      timeout: 35000,
+      timeout: 45000,
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Referer": "https://www.tiktok.com/"
@@ -117,7 +117,7 @@ async function fastDownload(url, destPath) {
   }
 }
 
-const MAX_INPUT_MB = 250;
+const MAX_INPUT_MB = 450;
 const RAW_LIMIT_MB = 60;
 
 export default {
@@ -171,14 +171,12 @@ export default {
           originalBitrate = parseInt(stdout.trim(), 10);
         } catch (e) {}
 
-        // Blindaje anti-fallos: Si el video viene con locuras de 100Mbps+, limitamos el objetivo para proteger Termux
         const safeBitrate = (originalBitrate > 0 && originalBitrate < 30000000) ? originalBitrate : 8000000;
         const targetBitrate = Math.floor(safeBitrate * 0.92);
         const bitrateArg = `-b:v ${targetBitrate} -maxrate ${Math.floor(targetBitrate * 1.1)} -bufsize ${Math.floor(targetBitrate * 1.5)}`;
 
-        // Añadimos limitador de fps a 60 si viene a 120fps para que no sature el procesador móvil
         const renderCmd = `ffmpeg -y -i "${inputPath}" -threads 4 -c:v libx264 -pix_fmt yuv420p -preset ultrafast ${bitrateArg} -r 60 -c:a copy -movflags +faststart "${finalPath}"`;
-        await execAsync(renderCmd, { timeout: 180000 });
+        await execAsync(renderCmd, { timeout: 240000 });
 
         if (fs.existsSync(finalPath) && fs.statSync(finalPath).size > 1024) {
           pathToSend = finalPath;
