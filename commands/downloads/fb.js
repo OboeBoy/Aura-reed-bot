@@ -1,14 +1,15 @@
 import axios from "axios";
 import fs from "fs";
 import path from "path";
-import os from "os";
+import crypto from "crypto";
 import {
   fetchJson,
   downloadStreamToFile,
 } from "../../controllers/downloadUtils.js";
+import { fytBold } from "../../models/TextStyle.js";
 
-const FB_REGEX =
-  /^(https?:\/\/)?(www\.)?(facebook\.com|fb\.watch|fb\.gg|m\.facebook\.com|share\/v|share\/r)\/.*$/i;
+const customTemp = path.join(path.dirname(new URL(import.meta.url).pathname), "../../tmp");
+if (!fs.existsSync(customTemp)) fs.mkdirSync(customTemp, { recursive: true });
 
 async function firstSuccessfulPromise(promises) {
   return new Promise((resolve, reject) => {
@@ -21,11 +22,8 @@ async function firstSuccessfulPromise(promises) {
     promises.forEach((p) => {
       Promise.resolve(p)
         .then((res) => {
-          if (res) {
-            resolve(res);
-          } else {
-            throw new Error("Respuesta vacía o inválida");
-          }
+          if (res) resolve(res);
+          else throw new Error("Respuesta vacía o inválida");
         })
         .catch((err) => {
           errors.push(err);
@@ -50,10 +48,8 @@ function normalizeDelirius(res) {
     throw new Error("Delirius no devolvió datos válidos");
   }
   const validVideos = res.list.filter((v) => v.url && v.url !== "/");
-  if (validVideos.length === 0)
-    throw new Error("Delirius: No se encontraron videos válidos");
+  if (validVideos.length ===0) throw new Error("Delirius: No se encontraron videos válidos");
 
-  // Priorizar HD/720p/1080p
   const hdVideo = validVideos.find(
     (v) =>
       v.quality &&
@@ -76,8 +72,7 @@ function normalizeAlyacore(res) {
     throw new Error("Alyacore no devolvió resultados válidos");
   }
   const validVideos = res.resultados.filter((v) => v.url && v.url !== "/");
-  if (validVideos.length === 0)
-    throw new Error("Alyacore: No se encontraron videos válidos");
+  if (validVideos.length === 0) throw new Error("Alyacore: No se encontraron videos válidos");
 
   const hdVideo = validVideos.find(
     (v) =>
@@ -101,8 +96,7 @@ function normalizeStellar(res) {
     throw new Error("StellarWA no devolvió resultados válidos");
   }
   const validVideos = res.resultados.filter((v) => v.url && v.url !== "/");
-  if (validVideos.length === 0)
-    throw new Error("StellarWA: No se encontraron videos válidos");
+  if (validVideos.length === 0) throw new Error("StellarWA: No se encontraron videos válidos");
 
   const hdVideo = validVideos.find(
     (v) =>
@@ -133,23 +127,18 @@ export default {
       return await socket.sendMessage(
         remoteJid,
         {
-          text: `╭〔 ⚠️ 𝐀𝐔𝐑𝐀 𝐑𝐄𝐄𝐃 〕⬣\n┃ ❌ 𝐅𝐀𝐋𝐓𝐀 𝐄𝐍𝐋𝐀𝐂𝐄\n╰━━━━━━━━━━━━⬣\n\n┃ > Por favor, proporciona un enlace\n┃ > de Facebook o Facebook Reels.\n\n╰〔 ⚡ 𝐒𝐘𝐒𝐓𝐄𝐌 〕⬣`,
+          text: `╭〔 ⚠️ ${fytBold("AURA REED")} 〕⬣\n┃ ❌ ${fytBold("FALTA ENLACE")}\n╰━━━━━━━━━━━━⬣\n\n┃ > Por favor, proporciona un enlace\n┃ > de Facebook o Facebook Reels.\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣`,
         },
         { quoted: message },
       );
     }
 
-    await socket.sendMessage(remoteJid, {
-      react: { text: "⏳", key: message.key },
-    });
+    socket.sendMessage(remoteJid, { react: { text: "⏳", key: message.key } }).catch(() => {});
 
-    const tempId = Date.now();
-    const tempPath = path.join(os.tmpdir(), `aura-fbdl-${tempId}.mp4`);
+    const fileId = crypto.randomBytes(8).toString("hex");
+    const tempPath = path.join(customTemp, `fb_${fileId}.mp4`);
 
     try {
-      console.log(`[FB Downloader] Buscando video para la URL: ${url}`);
-
-      // Carrera en paralelo de las 3 APIs
       const fbTasks = [
         (async () => {
           const res = await fetchJson(
@@ -159,7 +148,7 @@ export default {
         })(),
         (async () => {
           const res = await fetchJson(
-            `https://api.alyacore.xyz/dl/facebook?url=${encodeURIComponent(url)}&key=oboe`,
+            `https://api.alyacore.xyz/dl/facebook?url=${encodeURIComponent(url)}&key=${global.Apis?.apiAiya?.apikey || "oboe"}`,
           );
           return normalizeAlyacore(res);
         })(),
@@ -167,29 +156,19 @@ export default {
           const res = await fetchJson(
             `https://api.stellarwa.xyz/dl/facebook?url=${encodeURIComponent(url)}&key=api-7dSKm`,
           );
-          return normalizeStellar(res);
+5          return normalizeStellar(res);
         })(),
       ];
 
       const metadata = await firstSuccessfulPromise(fbTasks);
       const { url: videoUrl, quality, thumbnail, motor } = metadata;
 
-      console.log(
-        `[FB Downloader] Servidor ganador: ${motor}. Descargando calidad: ${quality}`,
-      );
+      await downloadStreamToFile(videoUrl, tempPath, { timeout: 120000 });
 
-      // Enviar mensaje de carga
-      let caption = `╭〔 🎬 𝐅𝐀𝐂𝐄𝐁𝐎𝐎𝐊 𝐃𝐎𝐖𝐍𝐋𝐎𝐀𝐃𝐄𝐑 〕━⬣\n\n`;
-      caption += `┃ 🎥 𝐃𝐄𝐒𝐂𝐀𝐑𝐆𝐀𝐍𝐃𝐎 𝐀𝐑𝐂𝐇𝐈𝐕𝐎\n`;
-      caption += `┃ ⏳ 𝐄𝐬𝐩𝐞𝐫𝐞 𝐮𝐧 𝐦𝐨𝐦𝐞𝐧𝐭𝐨...\n\n`;
-      caption += `┣━━━━━━━━━━━━⬣\n\n`;
-      caption += `┃ > 𝐂𝐚𝐥𝐢𝐝𝐚𝐝 › ${quality}\n`;
-      caption += `┃ > 𝐌𝐨𝐝𝐨 › Video (MP4)\n`;
-      caption += `┃ > 𝐌𝐨𝐭𝐨𝐫 › ${motor}\n\n`;
-      caption += `┣━━━━━━━━━━━━⬣\n\n`;
-      caption += `┃ > 𝐄𝐥 𝐚𝐫𝐜𝐡ι𝐯ο 𝐬𝐞 𝐞𝐬𝐭𝐚́\n`;
-      caption += `┃ > 𝐞𝐧𝐯𝐢𝐚𝐧𝐝𝐨, 𝐞𝐬𝐩𝐞𝐫𝐚 𝐮𝐧 𝐦𝐨𝐦𝐞𝐧𝐭𝐨...\n\n`;
-      caption += `╰━━〔 ⚡ 𝐒𝐘𝐒𝐓𝐄𝐌 𝐀𝐂𝐓𝐈𝐕𝐄 〕━━⬣`;
+      let caption = `╭〔 🎥 ${fytBold("FACEBOOK VIDEO")} 〕━⬣\n\n`;
+      caption += `┃ > ${fytBold("Calidad")} › ${quality}\n`;
+      caption += `┃ > ${fytBold("Motor")} › ${motor}\n`;
+      caption += `╰〔 ⚡ ${fytBold("SYSTEM ACTIVE")} 〕⬣`;
 
       if (thumbnail) {
         await socket.sendMessage(
@@ -197,54 +176,36 @@ export default {
           { image: { url: thumbnail }, caption },
           { quoted: message },
         );
-      } else {
-        await socket.sendMessage(
-          remoteJid,
-          { text: caption },
-          { quoted: message },
-        );
       }
 
-      await downloadStreamToFile(videoUrl, tempPath, { timeout: 120000 });
-
-      // Enviar el video a WhatsApp
-      await socket.sendMessage(remoteJid, {
-        react: { text: "✅", key: message.key },
-      });
       await socket.sendMessage(
         remoteJid,
         {
           video: { url: tempPath },
           mimetype: "video/mp4",
-          fileName: `facebook_video_${tempId}.mp4`,
-          caption: `🎬 *𝐅𝐚𝐜𝐞𝐛𝐨𝐨𝐤 𝐕𝐢𝐝𝐞𝐨*\n⚡ *𝐀𝐮𝐫𝐚 𝐑𝐞𝐞𝐝 𝐖𝐚𝐁𝐨𝐭*`,
+          fileName: "facebook.mp4",
+          caption: caption,
+          contextInfo: {
+            isForwarded: true,
+            forwardingScore: 999
+          }
         },
         { quoted: message },
       );
+
+      socket.sendMessage(remoteJid, { react: { text: "✅", key: message.key } }).catch(() => {});
     } catch (error) {
-      console.error("Error en Facebook Downloader:", error);
-      await socket.sendMessage(remoteJid, {
-        react: { text: "❌", key: message.key },
-      });
+      socket.sendMessage(remoteJid, { react: { text: "❌", key: message.key } }).catch(() => {});
+      const errorMsg = error.message || "Ocurrió un error inesperado.";
       await socket.sendMessage(
         remoteJid,
         {
-          text: `╭〔 ❌ 𝐀𝐔𝐑𝐀 𝐑𝐄𝐄𝐃 〕⬣\n┃ ⚠️ 𝐄𝐑𝐑𝐎𝐑 𝐃𝐄 𝐃𝐄𝐒𝐂𝐀𝐑𝐆𝐀\n╰━━━━━━━━━━━━⬣\n\n┃ > ${error.message || "Ocurrió un error inesperado al procesar el video de Facebook."}\n\n╰〔 ⚡ 𝐒𝐘𝐒𝐓𝐄𝐌 〕⬣`,
+          text: `╭〔 ❌ ${fytBold("AURA REED")} 〕⬣\n┃ ⚠️ ${fytBold("ERROR REAL")}\n╰━━━━━━━━━━━━⬣\n\n┃ > ${errorMsg}\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣`,
         },
         { quoted: message },
       );
     } finally {
-      // Eliminar archivo temporal
-      try {
-        if (fs.existsSync(tempPath)) {
-          fs.unlinkSync(tempPath);
-        }
-      } catch (err) {
-        console.error(
-          "[FB Downloader] Error al limpiar archivo temporal:",
-          err,
-        );
-      }
+      await fs.promises.unlink(tempPath).catch(() => {});
     }
   },
 };
