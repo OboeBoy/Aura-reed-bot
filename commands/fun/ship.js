@@ -113,13 +113,16 @@ export default {
   description: "Genera una tarjeta de compatibilidad entre dos usuarios",
   category: "fun",
 
-  execute: async(sock, m, args, { remoteJid, jidRemitente, groupMetadata }) => {
-    if (!groupMetadata) {
-      return await sock.sendMessage(
-        remoteJid,
-        { text: "『💘』Este comando solo funciona en grupos." },
-        { quoted: m },
-      );
+  execute: async (sock, m, args, { jidRemitente, groupMetadata }) => {
+    const remoteJid = m.key.remoteJid;
+    if (!remoteJid.endsWith("@g.us")) {
+      let text = `╭〔 ❌ ${fytBold("AURA REED")} 〕⬣\n`;
+      text += `┃ ${fytBold("ACCIÓN INCOMPATIBLE")} \n`;
+      text += `╰━━━━━━━━━━━━⬣\n\n`;
+      text += `┃ > Este comando solo funciona en grupos.\n\n`;
+      text += `╰〔 ⚡ ${fytBold("SYSTEM ALERT")} 〕⬣`;
+
+      return socket.sendMessage(remoteJid, { text }, { quoted: message });
     }
 
     const messageContext = m.message?.extendedTextMessage?.contextInfo;
