@@ -48,7 +48,7 @@ function normalizeDelirius(res) {
     throw new Error("Delirius no devolvió datos válidos");
   }
   const validVideos = res.list.filter((v) => v.url && v.url !== "/");
-  if (validVideos.length ===0) throw new Error("Delirius: No se encontraron videos válidos");
+  if (validVideos.length === 0) throw new Error("Delirius: No se encontraron videos válidos");
 
   const hdVideo = validVideos.find(
     (v) =>
@@ -156,7 +156,7 @@ export default {
           const res = await fetchJson(
             `https://api.stellarwa.xyz/dl/facebook?url=${encodeURIComponent(url)}&key=api-7dSKm`,
           );
-5          return normalizeStellar(res);
+          return normalizeStellar(res);
         })(),
       ];
 
