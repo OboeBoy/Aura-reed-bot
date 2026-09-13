@@ -3,7 +3,6 @@ import { fytBold } from "../../models/TextStyle.js";
 
 function getMemoryInfo() {
   try {
-    // Intentar Cgroups v2 (Sistemas modernos de contenedores/Pterodactyl)
     if (
       fs.existsSync("/sys/fs/cgroup/memory.max") &&
       fs.existsSync("/sys/fs/cgroup/memory.current")
@@ -15,13 +14,12 @@ function getMemoryInfo() {
 
       if (total !== "max" && !isNaN(Number(total)) && Number(total) > 0) {
         return {
-          total: Number(total) / 1024 / 1024, // Pasar a MB
-          used: Number(used) / 1024 / 1024, // Pasar a MB
+          total: Number(total) / 1024 / 1024,
+          used: Number(used) / 1024 / 1024,
         };
       }
     }
 
-    // Intentar Cgroups v1 (Sistemas clásicos)
     if (fs.existsSync("/sys/fs/cgroup/memory/memory.limit_in_bytes")) {
       const total = fs
         .readFileSync("/sys/fs/cgroup/memory/memory.limit_in_bytes", "utf8")
@@ -36,18 +34,15 @@ function getMemoryInfo() {
         Number(total) > 0
       ) {
         return {
-          total: Number(total) / 1024 / 1024, // Pasar a MB
-          used: Number(used) / 1024 / 1024, // Pasar a MB
+          total: Number(total) / 1024 / 1024,
+          used: Number(used) / 1024 / 1024,
         };
       }
     }
-  } catch (e) {
-    // Silenciar errores de lectura
-  }
+  } catch (e) {}
 
-  // Fallback: Si no se puede leer el contenedor, usamos la RAM usada por el bot
   const used = process.memoryUsage().rss / 1024 / 1024;
-  const total = 1750; // Fallback seguro con tus 1.71 GiB en MB
+  const total = 1750;
   return { total, used };
 }
 
@@ -57,9 +52,8 @@ export default {
   category: "system",
 
   async execute(sock, m, args) {
-    const start = Date.now();
+    const start = performance.now();
 
-    // Mensaje de carga
     const { key } = await sock.sendMessage(
       m.key.remoteJid,
       {
@@ -68,18 +62,13 @@ export default {
       { quoted: m },
     );
 
-    const end = Date.now();
-    const latency = end - start;
+    const latency = Math.round(performance.now() - start);
 
-    // Cálculo de Memoria RAM Real
     const memory = getMemoryInfo();
     const usedRAM = memory.used;
     const totalRAM = memory.total;
-
-    // El porcentaje nos ayuda a calcular las condiciones de forma más justa sin importar el tamaño del host
     const ramPercent = (usedRAM / totalRAM) * 100;
 
-    // Condiciones de RAM basadas en porcentaje consumido
     let ramStatus = "";
     if (ramPercent < 50) {
       ramStatus = "🟢 Óptimo";
@@ -102,7 +91,6 @@ export default {
       system = "En problemas";
     }
 
-    // Mensaje con edición
     await sock.sendMessage(
       m.key.remoteJid,
       {
