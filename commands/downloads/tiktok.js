@@ -51,39 +51,6 @@ class MediaProcessor {
     });
   }
 
-  verifyIntegrity(input) {
-    return new Promise((resolve) => {
-      const proc = spawn("ffprobe", [
-        "-v", "error",
-        "-select_streams", "v:0",
-        "-show_entries", "stream=codec_name,pix_fmt,level",
-        "-of", "csv=p=0",
-        input
-      ]);
-      let out = "";
-      proc.stdout.on("data", (d) => out += d.toString());
-      proc.on("close", () => {
-        const res = out.trim().toLowerCase().replace(/\s+/g, '');
-        const isH264 = res.includes("h264");
-        const isSafeColor = res.includes("yuv420p") || res.includes("yuvj420p");
-        const isSafeLevel = !res.includes("50") && !res.includes("51") && !res.includes("52");
-        resolve(isH264 && isSafeColor && isSafeLevel);
-      });
-      proc.on("error", () => resolve(false));
-    });
-  }
-
-  async remux(input, output) {
-    const params = [
-      "-y", "-fflags", "+genpts", "-i", input,
-      "-map", "0:v:0", "-map", "0:a:0?",
-      "-c", "copy",
-      "-movflags", "+faststart",
-      output
-    ];
-    await this.execute(params);
-  }
-
   async patchStream(input, output) {
     const params = [
       "-y", "-fflags", "+genpts", "-i", input,
@@ -250,21 +217,11 @@ export default {
           await mediaProcessor.transcode(inputP, outP);
           finalPath = outP;
         } catch (e) {
-          try {
-            await mediaProcessor.remux(inputP, outP);
-            finalPath = outP;
-          } catch (err) {
-            console.log(err.message);
-          }
+          console.log(e.message);
         }
       } else {
         try {
-          const isSafe = await mediaProcessor.verifyIntegrity(inputP);
-          if (isSafe) {
-            await mediaProcessor.remux(inputP, outP);
-          } else {
-            await mediaProcessor.patchStream(inputP, outP);
-          }
+          await mediaProcessor.patchStream(inputP, outP);
           finalPath = outP;
         } catch (e) {
           console.log(e.message);
