@@ -104,7 +104,7 @@ function drawProgressBar(ctx, x, y, width, height, percent) {
   ctx.restore();
 
   const heartX = x + 10 + Math.max(0, ((width - 20) * percent) / 100);
-  drawHeart(ctx, heartX, y + height / 2 - 2, 68, "#ff1010", "#050505", 5);
+  drawHeart(ctx, heartX, y + height / 2 - 4, 70, "#ff1010", "#050505", 5);
 }
 
 export default {
@@ -201,7 +201,7 @@ export default {
     const heartCenterX = 512;
     const heartCenterY = 400;
     
-    drawHeart(ctx, heartCenterX, heartCenterY, 170, "#ff007f", "#050505", 5);
+    drawHeart(ctx, heartCenterX, heartCenterY, 180, "#ff007f", "#050505", 5);
     
     ctx.font = "bold 45px sans-serif";
     ctx.textAlign = "center";
