@@ -10,6 +10,7 @@ import { botStatus } from "./../commands/group/bot.js";
 import { categories } from "./consts/cat.js";
 import { activeHangmanGames, gameKey } from "../models/gameState.js";
 import { processHangmanGuess } from "../commands/games/ahorcado.js";
+import { getDBSync } from "../models/db.js";
 
 // Caché para metadatos de grupos (guarda por 10 minutos en memoria RAM)
 const groupMetadataCache = new NodeCache({ stdTTL: 600, checkperiod: 120 });
@@ -289,12 +290,13 @@ export async function handleMessage(sock, m, db, saveDB) {
   const jidResuelto = await resolveLidToRealJid(senderRaw, sock, remoteJid);
   const numeroReal = jidResuelto.split("@")[0].split(":")[0];
   const jidRemitente = `${numeroReal}@s.whatsapp.net`;
-  const owners = db.owners || [];
+  const globalDb = getDBSync();
+  const owners = globalDb.owners || [];
   const botId = sock.user?.id || sock.user?.jid;
   const sender = m.key.fromMe ? botId : jidRemitente;
   const isOwner = owners.some((owner) => cleanJid(owner) === cleanJid(sender));
 
-  if (db.selfMode && !isOwner) return;
+  if (globalDb.selfMode && !isOwner) return;
 
   // 🚫 VERIFICACIÓN DE CHAT BANEADO (BANCHAT)
   const isChatBanned = db.chats?.[remoteJid]?.isBanned;

@@ -7,6 +7,7 @@ import { getDBSync } from "./db.js";
 import { LRUCache } from "lru-cache";
 
 const DATABASE_DIR = path.resolve("./database");
+const SUBBOTS_DATABASE_DIR = path.join(DATABASE_DIR, "subbots");
 
 const subBotInstances = new Map();
 
@@ -36,13 +37,22 @@ export async function getSubBotDB(senderId) {
     return subBotInstances.get(senderId).db;
   }
 
-  if (!fs.existsSync(DATABASE_DIR)) {
-    fs.mkdirSync(DATABASE_DIR, {
+  const subBotDatabaseDir = path.join(SUBBOTS_DATABASE_DIR, String(senderId));
+  const sqlitePath = path.join(subBotDatabaseDir, "db.sqlite3");
+  const legacySqlitePath = path.join(
+    DATABASE_DIR,
+    `db_subbot_${senderId}.sqlite3`,
+  );
+
+  if (!fs.existsSync(subBotDatabaseDir)) {
+    fs.mkdirSync(subBotDatabaseDir, {
       recursive: true,
     });
   }
 
-  const sqlitePath = path.join(DATABASE_DIR, `db_subbot_${senderId}.sqlite3`);
+  if (!fs.existsSync(sqlitePath) && fs.existsSync(legacySqlitePath)) {
+    fs.renameSync(legacySqlitePath, sqlitePath);
+  }
 
   const conn = new Database(sqlitePath);
 
