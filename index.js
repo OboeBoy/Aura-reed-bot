@@ -88,7 +88,7 @@ process.once("SIGINT", () => {
 process.once("SIGTERM", () => {
   saveAndExit("SIGTERM");
 });
-
+console.clear();
 // BANNER
 const banner = `
 \t${chalk.hex("#e9d5ff").bold("  █████╗ ██╗   ██╗██████╗  █████╗ ")}
@@ -470,9 +470,7 @@ async function connectToWhatsApp() {
       }
 
       isPairingChoiceMade = false;
-
       chosenPairingCode = false;
-
       chosenPhoneNumber = "";
 
       console.log(
