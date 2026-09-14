@@ -201,9 +201,9 @@ export default {
     const heartCenterX = 512;
     const heartCenterY = 400;
     
-    drawHeart(ctx, heartCenterX, heartCenterY, 150, "#ff007f", "#050505", 5);
+    drawHeart(ctx, heartCenterX, heartCenterY, 170, "#ff007f", "#050505", 5);
     
-    ctx.font = "bold 50px sans-serif";
+    ctx.font = "bold 45px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillStyle = "#050505";
