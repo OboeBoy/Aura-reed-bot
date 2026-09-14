@@ -31,7 +31,8 @@ async function checkBanStatus(number) {
 }
 
 function getNumberFromMessage(message, args) {
-  const mentionedJid = message.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
+  const mentionedJid =
+    message.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
   const mentionedNumber = normalizeNumber(mentionedJid?.split("@")[0]);
   const textNumber = normalizeNumber(args.join(""));
 
@@ -46,7 +47,9 @@ function formatBanResult(number, response) {
 
   const status = result.isBanned ? "BANEADO" : "NO BANEADO";
   const statusIcon = result.isBanned ? "🔴" : "🟢";
-  const permanence = result.isPermanent ? "Permanente" : "Temporal o no confirmado";
+  const permanence = result.isPermanent
+    ? "Permanente"
+    : "Temporal o no confirmado";
   const violation = result.violation_info?.description || "No especificada";
   const duration = result.violation_info?.duration || "No especificada";
   const risk = result.violation_info?.risk || "No especificado";
@@ -90,7 +93,10 @@ export default {
     try {
       const response = await checkBanStatus(number);
       await socket.sendMessage(remoteJid, {
-        react: { text: response?.resultado?.data?.isBanned ? "🔴" : "✅", key: message.key },
+        react: {
+          text: response?.resultado?.data?.isBanned ? "🔴" : "✅",
+          key: message.key,
+        },
       });
       return await socket.sendMessage(
         remoteJid,
@@ -104,7 +110,9 @@ export default {
       });
       return await socket.sendMessage(
         remoteJid,
-        { text: `❌ No se pudo consultar el estado de ${number}. Intenta nuevamente más tarde.` },
+        {
+          text: `❌ No se pudo consultar el estado de ${number}. Intenta nuevamente más tarde.`,
+        },
         { quoted: message },
       );
     }

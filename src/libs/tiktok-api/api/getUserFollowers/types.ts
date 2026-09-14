@@ -2,18 +2,18 @@ import type {
   StatsUserProfile,
   StatsV2UserProfile,
   UserProfile,
-} from '../getUser/types';
+} from "../getUser/types";
 
 export type FollowerUserProfile = Partial<UserProfile> &
   Pick<
     UserProfile,
-    | 'avatarLarger'
-    | 'avatarMedium'
-    | 'avatarThumb'
-    | 'id'
-    | 'nickname'
-    | 'secUid'
-    | 'uniqueId'
+    | "avatarLarger"
+    | "avatarMedium"
+    | "avatarThumb"
+    | "id"
+    | "nickname"
+    | "secUid"
+    | "uniqueId"
   > & {
     [key: string]: unknown;
   };

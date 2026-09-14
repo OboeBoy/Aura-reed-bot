@@ -1,5 +1,5 @@
 export const randomChar = (char: string, range: number) => {
-  let chars = '';
+  let chars = "";
   for (let i = 0; i < range; i++) {
     chars += char[Math.floor(Math.random() * char.length)];
   }
@@ -7,14 +7,14 @@ export const randomChar = (char: string, range: number) => {
 };
 
 export const generateDeviceId = () => {
-  const prefix = '7';
-  const random = randomChar('0123456789', 18);
+  const prefix = "7";
+  const random = randomChar("0123456789", 18);
   return `${prefix}${random}`;
 };
 
 export const generateOdinId = () => {
-  const prefix = '7';
-  const random = randomChar('0123456789', 18);
+  const prefix = "7";
+  const random = randomChar("0123456789", 18);
   return `${prefix}${random}`;
 };
 
@@ -26,11 +26,11 @@ export const extractMsToken = (
   }
 
   // First try to extract from set-cookie header
-  const setCookies = headers['set-cookie'];
+  const setCookies = headers["set-cookie"];
   if (setCookies) {
     const cookies = Array.isArray(setCookies) ? setCookies : [setCookies];
     const msTokenCookie = cookies.find((cookie: string) =>
-      cookie.includes('msToken='),
+      cookie.includes("msToken="),
     );
     if (msTokenCookie) {
       const match = msTokenCookie.match(/msToken=([^;]+)/);
@@ -41,7 +41,7 @@ export const extractMsToken = (
   }
 
   // Second try to extract from x-ms-token header
-  const xMsToken = headers['x-ms-token'];
+  const xMsToken = headers["x-ms-token"];
   if (xMsToken) {
     return xMsToken;
   }

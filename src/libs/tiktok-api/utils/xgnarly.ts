@@ -1,6 +1,6 @@
 /* eslint-disable */
 
-import { createHash, randomInt } from 'crypto';
+import { createHash, randomInt } from "crypto";
 
 /* ── CONSTANTS ────────────────────────────────────────── */
 const aa = [
@@ -144,7 +144,7 @@ function quarter(st: number[], a: number, b: number, c: number, d: number) {
 
 function chachaBlock(state: number[], rounds: number) {
   const w = state.slice(); // working copy
-  for (let r = 0; r < rounds; ) {
+  for (let r = 0; r < rounds;) {
     // column round
     quarter(w, 0, 4, 8, 12);
     quarter(w, 1, 5, 9, 13);
@@ -187,7 +187,7 @@ const numToBytes = (val: number) =>
     : [(val >> 24) & 0xff, (val >> 16) & 0xff, (val >> 8) & 0xff, val & 0xff];
 
 const beIntFromStr = (str: string) => {
-  const buf = Buffer.from(str, 'utf8').subarray(0, 4);
+  const buf = Buffer.from(str, "utf8").subarray(0, 4);
   let acc = 0;
   for (const b of buf) acc = (acc << 8) | b;
   return acc >>> 0;
@@ -267,32 +267,32 @@ function encrypt(
   body: string,
   userAgent: string,
   envcode: number = 0,
-  version: '5.1.0' | '5.1.1' = '5.1.1',
+  version: "5.1.0" | "5.1.1" = "5.1.1",
   timestampMs: number = Date.now(),
 ): string {
   /* build the obj map with insertion order intact */
   const obj = new Map<number, string | number>();
   obj.set(1, 1);
   obj.set(2, envcode);
-  obj.set(3, createHash('md5').update(queryString).digest('hex'));
-  obj.set(4, createHash('md5').update(body).digest('hex'));
-  obj.set(5, createHash('md5').update(userAgent).digest('hex'));
+  obj.set(3, createHash("md5").update(queryString).digest("hex"));
+  obj.set(4, createHash("md5").update(body).digest("hex"));
+  obj.set(5, createHash("md5").update(userAgent).digest("hex"));
   obj.set(6, Math.floor(timestampMs / 1000));
   obj.set(7, 1508145731);
   obj.set(8, (timestampMs * 1000) % 2147483648);
   obj.set(9, version);
 
-  if (version === '5.1.1') {
-    obj.set(10, '1.0.0.314');
+  if (version === "5.1.1") {
+    obj.set(10, "1.0.0.314");
     obj.set(11, 1);
     let v12 = 0;
     for (let i = 1; i <= 11; i++) {
       const v = obj.get(i)!;
-      const toXor = typeof v === 'number' ? v : beIntFromStr(v);
+      const toXor = typeof v === "number" ? v : beIntFromStr(v);
       v12 ^= toXor;
     }
     obj.set(12, v12 >>> 0);
-  } else if (version !== '5.1.0') {
+  } else if (version !== "5.1.0") {
     throw new Error(`Unsupported version: ${version}`);
   }
 
@@ -300,7 +300,7 @@ function encrypt(
   let v0 = 0;
   for (let i = 1; i <= obj.size; i++) {
     const v = obj.get(i)!;
-    if (typeof v === 'number') v0 ^= v;
+    if (typeof v === "number") v0 ^= v;
   }
   obj.set(0, v0 >>> 0);
 
@@ -310,9 +310,9 @@ function encrypt(
   for (const [k, v] of obj) {
     payload.push(k);
     const valBytes =
-      typeof v === 'number'
+      typeof v === "number"
         ? numToBytes(v)
-        : Array.from(Buffer.from(v, 'utf8'));
+        : Array.from(Buffer.from(v, "utf8"));
     payload.push(...numToBytes(valBytes.length));
     payload.push(...valBytes);
   }
@@ -354,7 +354,7 @@ function encrypt(
 
   /* custom alphabet Base-64 */
   const alphabet =
-    'u09tbS3UvgDEe6r-ZVMXzLpsAohTn7mdINQlW412GqBjfYiyk8JORCF5/xKHwacP=';
+    "u09tbS3UvgDEe6r-ZVMXzLpsAohTn7mdINQlW412GqBjfYiyk8JORCF5/xKHwacP=";
   const out: string[] = [];
   const fullLen = Math.floor(finalStr.length / 3) * 3;
   for (let i = 0; i < fullLen; i += 3) {
@@ -369,7 +369,7 @@ function encrypt(
       alphabet[block & 63],
     );
   }
-  return out.join('');
+  return out.join("");
 }
 
 /* ── EXPORTS ───────────────────────────────────────────── */

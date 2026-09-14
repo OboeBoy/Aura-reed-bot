@@ -8,7 +8,10 @@ import {
 } from "../../controllers/downloadUtils.js";
 import { fytBold } from "../../models/TextStyle.js";
 
-const customTemp = path.join(path.dirname(new URL(import.meta.url).pathname), "../../tmp");
+const customTemp = path.join(
+  path.dirname(new URL(import.meta.url).pathname),
+  "../../tmp",
+);
 if (!fs.existsSync(customTemp)) fs.mkdirSync(customTemp, { recursive: true });
 
 async function firstSuccessfulPromise(promises) {
@@ -48,7 +51,8 @@ function normalizeDelirius(res) {
     throw new Error("Delirius no devolvió datos válidos");
   }
   const validVideos = res.list.filter((v) => v.url && v.url !== "/");
-  if (validVideos.length === 0) throw new Error("Delirius: No se encontraron videos válidos");
+  if (validVideos.length === 0)
+    throw new Error("Delirius: No se encontraron videos válidos");
 
   const hdVideo = validVideos.find(
     (v) =>
@@ -72,7 +76,8 @@ function normalizeAlyacore(res) {
     throw new Error("Alyacore no devolvió resultados válidos");
   }
   const validVideos = res.resultados.filter((v) => v.url && v.url !== "/");
-  if (validVideos.length === 0) throw new Error("Alyacore: No se encontraron videos válidos");
+  if (validVideos.length === 0)
+    throw new Error("Alyacore: No se encontraron videos válidos");
 
   const hdVideo = validVideos.find(
     (v) =>
@@ -96,7 +101,8 @@ function normalizeStellar(res) {
     throw new Error("StellarWA no devolvió resultados válidos");
   }
   const validVideos = res.resultados.filter((v) => v.url && v.url !== "/");
-  if (validVideos.length === 0) throw new Error("StellarWA: No se encontraron videos válidos");
+  if (validVideos.length === 0)
+    throw new Error("StellarWA: No se encontraron videos válidos");
 
   const hdVideo = validVideos.find(
     (v) =>
@@ -133,7 +139,9 @@ export default {
       );
     }
 
-    socket.sendMessage(remoteJid, { react: { text: "⏳", key: message.key } }).catch(() => {});
+    socket
+      .sendMessage(remoteJid, { react: { text: "⏳", key: message.key } })
+      .catch(() => {});
 
     const fileId = crypto.randomBytes(8).toString("hex");
     const tempPath = path.join(customTemp, `fb_${fileId}.mp4`);
@@ -187,15 +195,19 @@ export default {
           caption: caption,
           contextInfo: {
             isForwarded: true,
-            forwardingScore: 999
-          }
+            forwardingScore: 999,
+          },
         },
         { quoted: message },
       );
 
-      socket.sendMessage(remoteJid, { react: { text: "✅", key: message.key } }).catch(() => {});
+      socket
+        .sendMessage(remoteJid, { react: { text: "✅", key: message.key } })
+        .catch(() => {});
     } catch (error) {
-      socket.sendMessage(remoteJid, { react: { text: "❌", key: message.key } }).catch(() => {});
+      socket
+        .sendMessage(remoteJid, { react: { text: "❌", key: message.key } })
+        .catch(() => {});
       const errorMsg = error.message || "Ocurrió un error inesperado.";
       await socket.sendMessage(
         remoteJid,

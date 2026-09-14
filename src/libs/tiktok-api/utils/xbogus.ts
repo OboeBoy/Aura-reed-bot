@@ -1,11 +1,11 @@
 /* eslint-disable */
-import { createHash } from 'crypto';
+import { createHash } from "crypto";
 
 /* ── CONSTANTS ────────────────────────────────────────── */
 const STANDARD_B64_ALPHABET =
-  'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 const CUSTOM_B64_ALPHABET =
-  'Dkdpgh4ZKsQB80/Mfvw36XI1R25-WUAlEi7NLboqYTOPuzmFjJnryx9HVGcaStCe';
+  "Dkdpgh4ZKsQB80/Mfvw36XI1R25-WUAlEi7NLboqYTOPuzmFjJnryx9HVGcaStCe";
 
 /* standard → custom Base-64 translation map */
 const ENC_TRANS = (() => {
@@ -18,12 +18,12 @@ const ENC_TRANS = (() => {
 
 /* ── HELPERS ───────────────────────────────────────────── */
 function customB64Encode(buf: Buffer) {
-  const b64 = buf.toString('base64');
-  let out = '';
+  const b64 = buf.toString("base64");
+  let out = "";
   for (const ch of b64) out += ENC_TRANS.get(ch) ?? ch; // '=' / newlines pass through
   return out;
 }
-const stdMd5Enc = (data: Buffer) => createHash('md5').update(data).digest();
+const stdMd5Enc = (data: Buffer) => createHash("md5").update(data).digest();
 
 /* pure-JS RC4 (KSA + PRGA) */
 function rc4Enc(keyBuf: Buffer, plaintextBuf: Buffer) {
@@ -74,13 +74,13 @@ function encrypt(
   const fixedVal = 0x4a41279f; // 3845494467
 
   /* double-MD5s */
-  const md5Params = stdMd5Enc(stdMd5Enc(Buffer.from(params, 'utf8')));
-  const md5Post = stdMd5Enc(stdMd5Enc(Buffer.from(postData, 'utf8')));
+  const md5Params = stdMd5Enc(stdMd5Enc(Buffer.from(params, "utf8")));
+  const md5Post = stdMd5Enc(stdMd5Enc(Buffer.from(postData, "utf8")));
 
   /* UA → RC4 → Base64 → MD5 */
-  const uaRc4 = stdRc4Enc(uaKey, Buffer.from(userAgent, 'utf8'));
-  const uaB64 = Buffer.from(uaRc4).toString('base64');
-  const md5Ua = stdMd5Enc(Buffer.from(uaB64, 'ascii'));
+  const uaRc4 = stdRc4Enc(uaKey, Buffer.from(userAgent, "utf8"));
+  const uaB64 = Buffer.from(uaRc4).toString("base64");
+  const md5Ua = stdMd5Enc(Buffer.from(uaB64, "ascii"));
 
   /* build buffer exactly like Python */
   const parts = [

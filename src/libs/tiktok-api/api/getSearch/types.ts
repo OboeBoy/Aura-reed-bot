@@ -48,7 +48,6 @@ export interface TikwmSearchAPIResponse {
   };
 }
 
-
 export interface TiktokSearchResultAuthor {
   id: string | null;
   uniqueId: string | null;
@@ -72,7 +71,7 @@ export interface TiktokSearchResultStatistics {
 
 export interface TiktokSearchResultItem {
   id: string | null;
-  type: 'video' | 'slideshow';
+  type: "video" | "slideshow";
   desc: string;
   videoUrl: string | null;
   videoUrlWatermarked: string | null;

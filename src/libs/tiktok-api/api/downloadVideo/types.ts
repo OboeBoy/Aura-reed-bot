@@ -61,7 +61,7 @@ export interface TiktokVideo {
 }
 
 export interface TiktokVideoResult {
-  type: 'video';
+  type: "video";
   id: string;
   createTime: number;
   desc: string;
@@ -75,7 +75,7 @@ export interface TiktokVideoResult {
 }
 
 export interface TiktokImageResult {
-  type: 'image';
+  type: "image";
   id: string;
   createTime: number;
   desc: string;
@@ -89,7 +89,7 @@ export interface TiktokImageResult {
 }
 
 export interface TiktokDownloadResponse {
-  status: 'success' | 'error';
+  status: "success" | "error";
   message?: string;
   result?: TiktokVideoResult | TiktokImageResult;
   resultNotParsed?: {

@@ -1,21 +1,13 @@
 import { downloadMediaMessage } from "@whiskeysockets/baileys";
 import { fytBold } from "../../models/TextStyle.js";
-import { exec } from "child_process";
-import { promisify } from "util";
-import ffmpegStatic from "ffmpeg-static";
+import ffmpegPath from "ffmpeg-static";
+import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
+import os from "os";
 import { ffmpegSemaphore } from "../../controllers/downloadUtils.js";
 
-const execAsync = promisify(exec);
-
-const customTemp = path.join(
-  path.dirname(new URL(import.meta.url).pathname),
-  "../../tmp",
-);
-if (!fs.existsSync(customTemp)) fs.mkdirSync(customTemp, { recursive: true });
-
-// Función para desempaquetar el mensaje multimedia
+// Función robusta para desempaquetar y limpiar el mensaje multimedia
 function unwrapMessage(msg) {
   if (!msg) return null;
   if (
@@ -38,57 +30,89 @@ function unwrapMessage(msg) {
   return null;
 }
 
-// Convertidor usando ffmpeg-static con comandos directos vía execAsync
+// Convertidor unificado basado en FFMPEG (seguro y compatible al 100% en Windows)
 async function convertToSticker(inputPath, outputPath, isVideo, attempt = 1) {
-  let fps = 60;
-  let quality = 90;
-  let duration = 20;
-  let scale = 512;
-
-  if (attempt === 2) {
-    fps = 30;
-    quality = 60;
-    duration = 10;
-    scale = 512;
-  } else if (attempt === 3) {
-    fps = 15;
-    quality = 40;
-    duration = 8;
-    scale = 384;
-  } else if (attempt >= 4) {
-    fps = 10;
-    quality = 30;
-    duration = 5;
-    scale = 320;
+  if (!ffmpegPath) {
+    throw new Error("No se encontró el binario de ffmpeg-static.");
   }
 
-  let optionsStr = `-an -vsync 0`;
+  return new Promise((resolve, reject) => {
+    let fps = 30;
+    let quality = 50;
+    let duration = 20; // Límite de 20 segundos
 
-  if (isVideo) {
-    optionsStr += ` -loop 0 -t ${duration} -q:v ${quality} -preset default -compression_level 6`;
-  } else {
-    optionsStr += ` -q:v 80`;
-  }
+    if (attempt === 2) {
+      fps = 25;
+      quality = 35;
+      duration = 15;
+    } else if (attempt >= 3) {
+      fps = 20;
+      quality = 20;
+      duration = 10;
+    }
 
-  // Filtro inteligente: Mantiene el tamaño proporcional exacto (sin estirar ni deformar)
-  // respetando los límites de ${scale}x${scale}, y rellena el espacio sobrante del cuadro de 512x512
-  // con un fondo completamente transparente (0x000000@0).
-  const filtroVideo = isVideo
-    ? `format=rgba,scale=${scale}:${scale}:force_original_aspect_ratio=decrease,fps=${fps},pad=512:512:(512-iw)/2:(512-ih)/2:color=0x000000@0`
-    : `format=rgba,scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(512-iw)/2:(512-ih)/2:color=0x000000@0`;
+    const filtroVideo = isVideo
+      ? `format=rgba,scale=512:512:force_original_aspect_ratio=decrease,fps=${fps},pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x000000@0`
+      : "format=rgba,scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x000000@0";
 
-  const cmd = `"${ffmpegStatic}" -y -i "${inputPath}" ${optionsStr} -vf "${filtroVideo}" -f webp "${outputPath}"`;
+    const options = [
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-y",
+      "-i",
+      inputPath,
+      "-vf",
+      filtroVideo,
+      "-c:v",
+      "libwebp",
+      "-an",
+      "-vsync",
+      "0",
+    ];
 
-  await execAsync(cmd, { maxBuffer: 1024 * 1024 * 10 });
+    if (isVideo) {
+      options.push(
+        "-loop",
+        "0",
+        "-t",
+        String(duration),
+        "-q:v",
+        String(quality),
+      );
+    } else {
+      options.push("-q:v", "80");
+    }
+
+    options.push(outputPath);
+
+    const process = spawn(ffmpegPath, options, { windowsHide: true });
+    let errorOutput = "";
+
+    process.stderr.on("data", (chunk) => {
+      errorOutput += chunk.toString();
+    });
+    process.on("error", reject);
+    process.on("close", (code) => {
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(
+          new Error(errorOutput.trim() || `FFmpeg terminó con código ${code}.`),
+        );
+      }
+    });
+  });
 }
 
 export default {
   name: ["s", "sticker", "stiker"],
   category: "sticker",
-  description: "Convierte imágenes, videos o reescribe metadatos de stickers.",
+  description: "Convierte imágenes, videos o GIFs en stickers optimizados.",
   execute: async (socket, message, args, { prefix }) => {
     const remoteJid = message.key.remoteJid;
 
+    // Determinar el mensaje multimedia objetivo (citado o directo)
     const quoted =
       message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
     const targetMessage = quoted
@@ -99,7 +123,7 @@ export default {
       return await socket.sendMessage(
         remoteJid,
         {
-          text: `╭〔 ⚠️ ${fytBold("AURA REED")} 〕⬣\n┃ ❌ ${fytBold("FALTA MEDIO")}\n╰━━━━━━━━━━━━⬣\n\n┃ > Por favor, envía una imagen/video/sticker\n┃ > con la descripción *${prefix}s* o responde\n┃ > a un archivo con *${prefix}s*.\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣`,
+          text: `╭〔 ⚠️ ${fytBold("AURA REED")} 〕⬣\n┃ ❌ ${fytBold("FALTA MEDIO")}\n╰━━━━━━━━━━━━⬣\n\n┃ > Por favor, envía una imagen/video\n┃ > con la descripción *${prefix}s* o responde\n┃ > a una imagen/video con *${prefix}s*.\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣`,
         },
         { quoted: message },
       );
@@ -110,14 +134,26 @@ export default {
     });
 
     const tempId = Date.now();
-    const tempInPath = path.join(customTemp, `aura-sticker-in-${tempId}`);
+    const tempInPath = path.join(os.tmpdir(), `aura-sticker-in-${tempId}`);
     const tempOutPath = path.join(
-      customTemp,
+      os.tmpdir(),
       `aura-sticker-out-${tempId}.webp`,
     );
 
     try {
-      const downloadMsg = { key: message.key, message: targetMessage };
+      // Descargar el contenido multimedia
+      console.log("[Sticker] Descargando contenido multimedia...");
+      const quotedInfo = message.message?.extendedTextMessage?.contextInfo;
+      const downloadMsg = quoted
+        ? {
+            key: {
+              remoteJid: quotedInfo.remoteJid || remoteJid,
+              id: quotedInfo.stanzaId,
+              participant: quotedInfo.participant,
+            },
+            message: quoted,
+          }
+        : message;
       const buffer = await downloadMediaMessage(
         downloadMsg,
         "buffer",
@@ -129,56 +165,62 @@ export default {
         throw new Error("No se pudo descargar el archivo o está vacío.");
       }
 
-      let stickerBuffer;
+      console.log(
+        `[Sticker] Archivo descargado con éxito. Tamaño: ${buffer.length} bytes`,
+      );
 
-      // SI YA ES UN STICKER: Nos saltamos FFmpeg para evitar cierres o fallos
-      if (targetMessage.stickerMessage) {
-        stickerBuffer = buffer;
+      // Escribir archivo temporal de entrada
+      await fs.promises.writeFile(tempInPath, buffer);
+
+      const isVideo =
+        !!targetMessage.videoMessage ||
+        (targetMessage.documentMessage &&
+          targetMessage.documentMessage.mimetype?.startsWith("video/"));
+
+      if (!isVideo) {
+        console.log("[Sticker] Procesando imagen estática con ffmpeg...");
+        await ffmpegSemaphore.run(() =>
+          convertToSticker(tempInPath, tempOutPath, false),
+        );
       } else {
-        // SI ES IMAGEN, VIDEO O DOCUMENTO: Procesamos con FFmpeg
-        await fs.promises.writeFile(tempInPath, buffer);
+        console.log("[Sticker] Procesando video/GIF animado con ffmpeg...");
 
-        const isVideo =
-          !!targetMessage.videoMessage ||
-          (targetMessage.documentMessage &&
-            targetMessage.documentMessage.mimetype?.startsWith("video/"));
+        let attempt = 1;
+        let fileSize = Infinity;
 
-        if (!isVideo) {
+        while (fileSize > 1000000 && attempt <= 3) {
+          if (fs.existsSync(tempOutPath)) {
+            await fs.promises.unlink(tempOutPath);
+          }
+
+          console.log(`[Sticker] Optimizando video, intento: ${attempt}...`);
           await ffmpegSemaphore.run(() =>
-            convertToSticker(tempInPath, tempOutPath, false),
+            convertToSticker(tempInPath, tempOutPath, true, attempt),
           );
-        } else {
-          let attempt = 1;
-          let fileSize = Infinity;
 
-          while (fileSize > 1000000 && attempt <= 4) {
-            if (fs.existsSync(tempOutPath)) {
-              await fs.promises.unlink(tempOutPath);
-            }
-
-            await ffmpegSemaphore.run(() =>
-              convertToSticker(tempInPath, tempOutPath, true, attempt),
-            );
-
-            fileSize = fs.statSync(tempOutPath).size;
-            attempt++;
-          }
-
-          if (fileSize > 1000000) {
-            throw new Error(
-              "El video es demasiado pesado. Intenta con uno más corto.",
-            );
-          }
+          fileSize = fs.statSync(tempOutPath).size;
+          console.log(
+            `[Sticker] Tamaño final del archivo en intento ${attempt}: ${fileSize} bytes`,
+          );
+          attempt++;
         }
 
-        stickerBuffer = await fs.promises.readFile(tempOutPath);
+        if (fileSize > 1000000) {
+          throw new Error(
+            "El video es demasiado largo o pesado para un sticker animado. Intenta con uno de menos de 4 segundos.",
+          );
+        }
       }
 
-      // Reescritura / Inyección de Metadatos (Nombre del Pack y Autor)
+      // Leer sticker generado
+      const stickerBuffer = await fs.promises.readFile(tempOutPath);
+
+      // Obtener el nombre del usuario y formatear metadatos
       const pushName = message.pushName || "Usuario";
       const packName = `${fytBold("AURA REED")} 🧠 ${fytBold("BOT")}`;
       const author = `@${pushName}`;
 
+      console.log(`[Sticker] Inyectando metadatos para ${pushName}...`);
       let finalStickerBuffer;
       try {
         const { addStickerMetadata } =
@@ -193,6 +235,7 @@ export default {
         finalStickerBuffer = stickerBuffer;
       }
 
+      // Enviar sticker
       await socket.sendMessage(remoteJid, {
         react: { text: "✅", key: message.key },
       });
@@ -217,6 +260,7 @@ export default {
         { quoted: message },
       );
     } finally {
+      // Limpieza de archivos temporales
       try {
         if (fs.existsSync(tempInPath)) await fs.promises.unlink(tempInPath);
         if (fs.existsSync(tempOutPath)) await fs.promises.unlink(tempOutPath);

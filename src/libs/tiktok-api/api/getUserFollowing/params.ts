@@ -1,7 +1,7 @@
-import { DEFAULT_MS_TOKEN } from '../../constants/tokens.ts';
-import { generateDeviceId, generateOdinId } from '../../utils/helpers.ts';
+import { DEFAULT_MS_TOKEN } from "../../constants/tokens.ts";
+import { generateDeviceId, generateOdinId } from "../../utils/helpers.ts";
 
-const LANG = 'en';
+const LANG = "en";
 
 export const getUserFollowingParams = ({
   userAgent,
@@ -22,21 +22,21 @@ export const getUserFollowingParams = ({
     WebIdLastTime: Date.now(),
     aid: 1988,
     app_language: `${LANG}-${region}`,
-    app_name: 'tiktok_web',
+    app_name: "tiktok_web",
     browser_language: `${LANG}-${region}`,
-    browser_name: 'Mozilla',
+    browser_name: "Mozilla",
     browser_online: true,
-    browser_platform: 'MacIntel',
-    browser_version: userAgent.replace('Mozilla/', ''),
-    channel: 'tiktok_web',
+    browser_platform: "MacIntel",
+    browser_version: userAgent.replace("Mozilla/", ""),
+    channel: "tiktok_web",
     cookie_enabled: true,
     count,
     current_region: region,
     data_collection_enabled: true,
     device_id: generateDeviceId(),
-    device_platform: 'web_pc',
+    device_platform: "web_pc",
     focus_state: true,
-    from_page: 'user',
+    from_page: "user",
     history_len: 3,
     is_fullscreen: false,
     is_non_personalized: false,
@@ -44,15 +44,15 @@ export const getUserFollowingParams = ({
     maxCursor: cursor,
     minCursor: cursor,
     odinId: generateOdinId(),
-    os: 'mac',
+    os: "mac",
     priority_region: region,
-    referer: '',
+    referer: "",
     region,
     scene: 21,
     screen_height: 1440,
     screen_width: 2560,
     secUid,
-    tz_name: 'UTC',
+    tz_name: "UTC",
     user_is_login: false,
     webcast_language: `${LANG}-${region}`,
     msToken: msToken ?? DEFAULT_MS_TOKEN,

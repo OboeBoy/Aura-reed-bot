@@ -57,7 +57,7 @@ async function DL_TIKTOK_AUDIO(input) {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        Accept: "application/json, text/plain, */*"
+        Accept: "application/json, text/plain, */*",
       },
       timeout: 15000,
     });
@@ -178,7 +178,7 @@ export default {
         });
         try {
           fs.unlinkSync(inputP);
-        } catch { }
+        } catch {}
         return await socket.sendMessage(
           remoteJid,
           {
@@ -254,10 +254,10 @@ export default {
     } finally {
       try {
         if (fs.existsSync(inputP)) fs.unlinkSync(inputP);
-      } catch { }
+      } catch {}
       try {
         if (fs.existsSync(outP)) fs.unlinkSync(outP);
-      } catch { }
+      } catch {}
     }
   },
 };

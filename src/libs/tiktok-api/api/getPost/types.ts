@@ -1,4 +1,4 @@
-import type { TiktokPostItem } from '../getUserPosts/types';
+import type { TiktokPostItem } from "../getUserPosts/types";
 
 export type TiktokPostResponse = {
   error?: string;

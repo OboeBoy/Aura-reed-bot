@@ -170,7 +170,7 @@ export default {
         });
         try {
           fs.unlinkSync(inputP);
-        } catch { }
+        } catch {}
         return await socket.sendMessage(
           remoteJid,
           {
@@ -283,13 +283,13 @@ export default {
     } finally {
       try {
         if (fs.existsSync(inputP)) fs.unlinkSync(inputP);
-      } catch { }
+      } catch {}
       try {
         if (fs.existsSync(outP)) fs.unlinkSync(outP);
-      } catch { }
+      } catch {}
       try {
         if (fs.existsSync(whatsappReadyPath)) fs.unlinkSync(whatsappReadyPath);
-      } catch { }
+      } catch {}
     }
   },
 };

@@ -200,9 +200,9 @@ export default {
     const percent = Math.floor(Math.random() * 101);
     const heartCenterX = 512;
     const heartCenterY = 400;
-    
+
     drawHeart(ctx, heartCenterX, heartCenterY, 180, "#ff007f", "#050505", 5);
-    
+
     ctx.font = "bold 45px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
