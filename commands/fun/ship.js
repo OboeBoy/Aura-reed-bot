@@ -201,13 +201,13 @@ export default {
     const heartCenterX = 512;
     const heartCenterY = 400;
     
-    drawHeart(ctx, heartCenterX, heartCenterY, 200, "#ff007f", "#050505", 5);
+    drawHeart(ctx, heartCenterX, heartCenterY, 150, "#ff007f", "#050505", 5);
     
-    ctx.font = "bold 38px sans-serif";
+    ctx.font = "bold 50px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillStyle = "#050505";
-    ctx.fillText(`${percent}%`, heartCenterX, heartCenterY + 16);
+    ctx.fillText(`${percent}%`, heartCenterX, heartCenterY + 20);
 
     drawProgressBar(ctx, 85, 580, 854, 78, percent);
 
