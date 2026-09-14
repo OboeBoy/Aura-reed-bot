@@ -207,7 +207,7 @@ export default {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillStyle = "#050505";
-    ctx.fillText(`${percent}%`, heartCenterX, heartCenterY + 0);
+    ctx.fillText(`${percent}%`, heartCenterX, heartCenterY + 10);
 
     drawProgressBar(ctx, 85, 580, 854, 78, percent);
 
