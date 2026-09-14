@@ -206,6 +206,27 @@ export async function getSubBotDB(senderId) {
     }
   }
 
+  if (dbData.customBanner?.path && fs.existsSync(dbData.customBanner.path)) {
+    const bannerPath = path.resolve(dbData.customBanner.path);
+    const legacySubBotDir = path.resolve(DATABASE_DIR);
+    const bannerFile = path.basename(bannerPath);
+
+    if (
+      bannerPath.startsWith(`${legacySubBotDir}${path.sep}`) &&
+      bannerFile.startsWith(`banner_${senderId}_`)
+    ) {
+      const migratedBannerPath = path.join(subBotDatabaseDir, bannerFile);
+
+      if (bannerPath !== migratedBannerPath) {
+        fs.renameSync(bannerPath, migratedBannerPath);
+        dbData.customBanner.path = migratedBannerPath;
+        conn
+          .prepare("UPDATE config SET value = ? WHERE key = 'customBanner'")
+          .run(JSON.stringify(dbData.customBanner));
+      }
+    }
+  }
+
   // ==========================================================
   // DB FINAL
   // ==========================================================

@@ -84,17 +84,20 @@ export default {
       const botId = isSubBot ? sock.subBotId : "principal";
       const timestamp = Date.now();
 
-      // Ensure database directory exists
-      if (!fs.existsSync("./database")) {
-        fs.mkdirSync("./database", { recursive: true });
-      }
+      const dir = isSubBot
+        ? path.resolve("./database", "subbots", String(botId))
+        : path.resolve("./database");
+
+      fs.mkdirSync(dir, { recursive: true });
 
       // Remove any old banner files for this specific bot to prevent accumulation
-      const dir = "./database";
       if (fs.existsSync(dir)) {
         const files = fs.readdirSync(dir);
         for (const file of files) {
-          if (file.startsWith(`banner_${botId}_`)) {
+          if (
+            file.startsWith(`banner_${botId}_`) ||
+            (isSubBot && file.startsWith("banner_"))
+          ) {
             try {
               fs.unlinkSync(path.join(dir, file));
             } catch (err) {
@@ -105,7 +108,7 @@ export default {
       }
 
       const filename = `banner_${botId}_${timestamp}.${ext}`;
-      const bannerPath = path.resolve(dir, filename);
+      const bannerPath = path.join(dir, filename);
       fs.writeFileSync(bannerPath, buffer);
 
       db.customBanner = {
