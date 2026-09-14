@@ -216,9 +216,11 @@ export default {
     const numB = userB.split("@")[0];
 
     let result;
-    if (percent >= 80) result = "¡Son el uno para el otro!";
-    else if (percent >= 50) result = "Hay potencial ahí...";
-    else if (percent >= 20) result = "Mejor quedan como amigos.";
+    if (percent >= 90) result = "¡Ya casense y tengan hijos!";
+    else if (percent >= 85) result = "¡Son el uno para el otro!";
+    else if (percent >= 70) result = "¡Sus Miradas se cruzan!";
+    else if (percent >= 50) result = "¡Lo pulsean!";
+    else if (percent >= 30) result = "Mejor quedan como amigos.";
     else result = "Cero compatibilidad, lo siento.";
 
     const caption =
