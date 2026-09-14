@@ -103,8 +103,8 @@ function drawProgressBar(ctx, x, y, width, height, percent) {
   }
   ctx.restore();
 
-  const heartX = x + 10 + Math.max(0, ((width - 20) * percent) / 100) - 5;
-  drawHeart(ctx, heartX, y + height / 2 - 8, 70, "#ff1010", "#050505", 5);
+  const heartX = x + 10 + Math.max(0, ((width - 20) * percent) / 100) - 10;
+  drawHeart(ctx, heartX, y + height / 2 - 8, 100, "#ff1010", "#050505", 5);
 }
 
 export default {
