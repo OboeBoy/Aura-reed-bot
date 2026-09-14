@@ -207,9 +207,9 @@ export default {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillStyle = "#050505";
-    ctx.fillText(`${percent}%`, heartCenterX, heartCenterY + 3);
+    ctx.fillText(`${percent}%`, heartCenterX, heartCenterY + 0);
 
-    drawProgressBar(ctx, 85, 500, 854, 78, percent);
+    drawProgressBar(ctx, 85, 580, 854, 78, percent);
 
     const buffer = canvas.toBuffer("image/png");
     const numA = userA.split("@")[0];
