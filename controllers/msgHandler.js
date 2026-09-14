@@ -11,6 +11,7 @@ import { categories } from "./consts/cat.js";
 import { activeHangmanGames, gameKey } from "../models/gameState.js";
 import { processHangmanGuess } from "../commands/games/ahorcado.js";
 import { getDBSync } from "../models/db.js";
+import { runWithGachaDatabase } from "../models/gachaDb.js";
 
 // Caché para metadatos de grupos (guarda por 10 minutos en memoria RAM)
 const groupMetadataCache = new NodeCache({ stdTTL: 600, checkperiod: 120 });
@@ -587,21 +588,23 @@ export async function handleMessage(sock, m, db, saveDB) {
         await sock.sendPresenceUpdate("composing", remoteJid);
 
         try {
-          await cmd.execute(sock, m, args, {
-            prefix,
-            db,
-            saveDB,
-            isOwner,
-            isAdmin,
-            isBotAdmin,
-            owners,
-            groupMetadata,
-            numeroReal,
-            jidRemitente,
-            senderRaw,
-            rawParticipant,
-            rawMentionedJid,
-          });
+          await runWithGachaDatabase(sock, () =>
+            cmd.execute(sock, m, args, {
+              prefix,
+              db,
+              saveDB,
+              isOwner,
+              isAdmin,
+              isBotAdmin,
+              owners,
+              groupMetadata,
+              numeroReal,
+              jidRemitente,
+              senderRaw,
+              rawParticipant,
+              rawMentionedJid,
+            }),
+          );
         } catch (err) {
           console.error(
             `[msgHandler] Error ejecutando comando ${commandName}:`,

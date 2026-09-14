@@ -1,17 +1,15 @@
 import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
+import { AsyncLocalStorage } from "node:async_hooks";
 
 const DATABASE_DIR = path.resolve("./database");
 const DB_FILE = path.join(DATABASE_DIR, "gacha.sqlite3");
+const SUBBOTS_DATABASE_DIR = path.join(DATABASE_DIR, "subbots");
+const gachaContext = new AsyncLocalStorage();
+const subBotDatabases = new Map();
 
-if (!fs.existsSync(DATABASE_DIR))
-  fs.mkdirSync(DATABASE_DIR, { recursive: true });
-
-const db = new Database(DB_FILE);
-db.pragma("journal_mode = WAL");
-
-db.exec(`
+const SCHEMA = `
   CREATE TABLE IF NOT EXISTS gacha_characters (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
@@ -56,7 +54,58 @@ db.exec(`
     char_name TEXT NOT NULL,
     series TEXT NOT NULL
   );
-`);
+`;
+
+function openGachaDatabase(filePath) {
+  const parentDir = path.dirname(filePath);
+  fs.mkdirSync(parentDir, { recursive: true });
+
+  const conn = new Database(filePath);
+  conn.pragma("journal_mode = WAL");
+  conn.exec(SCHEMA);
+  return conn;
+}
+
+const mainDb = openGachaDatabase(DB_FILE);
+
+const db = new Proxy(mainDb, {
+  get(target, property) {
+    const activeDb = gachaContext.getStore() || target;
+    const value = Reflect.get(activeDb, property, activeDb);
+    return typeof value === "function" ? value.bind(activeDb) : value;
+  },
+});
+
+function getGachaDatabase(socket) {
+  if (!socket?.isSubBot || !socket.subBotId) {
+    return mainDb;
+  }
+
+  const senderId = String(socket.subBotId);
+  if (subBotDatabases.has(senderId)) {
+    return subBotDatabases.get(senderId);
+  }
+
+  const subBotDir = path.join(SUBBOTS_DATABASE_DIR, senderId);
+  const filePath = path.join(subBotDir, "gacha.sqlite3");
+  const legacyPath = path.join(
+    DATABASE_DIR,
+    `gacha_subbot_${senderId}.sqlite3`,
+  );
+
+  fs.mkdirSync(subBotDir, { recursive: true });
+  if (!fs.existsSync(filePath) && fs.existsSync(legacyPath)) {
+    fs.renameSync(legacyPath, filePath);
+  }
+
+  const subBotDb = openGachaDatabase(filePath);
+  subBotDatabases.set(senderId, subBotDb);
+  return subBotDb;
+}
+
+export function runWithGachaDatabase(socket, callback) {
+  return gachaContext.run(getGachaDatabase(socket), callback);
+}
 
 const RARITY_EMOJI = {
   common: "⚪",
