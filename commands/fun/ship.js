@@ -20,14 +20,15 @@ function drawCircleAvatar(ctx, img, x, y, size) {
   ctx.beginPath();
   ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
   ctx.closePath();
-  ctx.clip();
   if (img) {
+    ctx.clip();
     ctx.drawImage(img, x, y, size, size);
   } else {
-    ctx.fillStyle = "#888";
-    ctx.fillRect(x, y, size, size);
+    ctx.fillStyle = "#6be368";
+    ctx.fill();
   }
   ctx.restore();
+
   ctx.beginPath();
   ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
   ctx.lineWidth = 14;
@@ -93,20 +94,17 @@ function drawProgressBar(ctx, x, y, width, height, percent) {
   ctx.fillStyle = "#ffffff";
   ctx.fill();
 
-  ctx.beginPath();
-  ctx.roundRect(
-    x + 10,
-    y + 10,
-    Math.max(0, ((width - 20) * percent) / 100),
-    height - 20,
-    radius - 5,
-  );
-  ctx.fillStyle = "#ff0505";
-  ctx.fill();
+  const fillWidth = Math.max(0, ((width - 20) * percent) / 100);
+  if (fillWidth > 0) {
+    ctx.beginPath();
+    ctx.roundRect(x + 10, y + 10, fillWidth, height - 20, radius - 5);
+    ctx.fillStyle = "#ff0505";
+    ctx.fill();
+  }
   ctx.restore();
 
-  const heartX = x + (width * percent) / 100;
-  drawHeart(ctx, heartX, y + height / 2 - 3, 72, "#ff1010", "#050505", 5);
+  const heartX = x + 10 + Math.max(0, ((width - 20) * percent) / 100);
+  drawHeart(ctx, heartX, y + height / 2 - 2, 68, "#ff1010", "#050505", 5);
 }
 
 export default {
@@ -123,7 +121,7 @@ export default {
       text += `┃ > Este comando solo funciona en grupos.\n\n`;
       text += `╰〔 ⚡ ${fytBold("SYSTEM ALERT")} 〕⬣`;
 
-      return socket.sendMessage(remoteJid, { text }, { quoted: message });
+      return sock.sendMessage(remoteJid, { text }, { quoted: m });
     }
 
     const messageContext = m.message?.extendedTextMessage?.contextInfo;
@@ -175,16 +173,16 @@ export default {
     }
 
     const width = 1024;
-    const height = 576;
+    const height = 740;
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext("2d");
 
-    ctx.fillStyle = "#c13cda";
+    ctx.fillStyle = "#b542e8";
     ctx.fillRect(0, 0, width, height);
 
     const avatarSize = 310;
-    const avatarY = 130;
-    const avatarX = 52;
+    const avatarY = 85;
+    const avatarX = 85;
     const [imgA, imgB] = await Promise.all([
       getProfilePic(sock, userA),
       getProfilePic(sock, userB),
@@ -200,15 +198,18 @@ export default {
     );
 
     const percent = Math.floor(Math.random() * 101);
-    const heartCenterY = 407;
-    drawHeart(ctx, width / 2, heartCenterY, 145, "#ff0078", "#050505", 5);
-    ctx.font = "bold 44px sans-serif";
+    const heartCenterX = 512;
+    const heartCenterY = 240;
+    
+    drawHeart(ctx, heartCenterX, heartCenterY, 125, "#ff007f", "#050505", 5);
+    
+    ctx.font = "bold 38px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillStyle = "#050505";
-    ctx.fillText(`${percent}%`, width / 2, heartCenterY + 3);
+    ctx.fillText(`${percent}%`, heartCenterX, heartCenterY + 3);
 
-    drawProgressBar(ctx, 65, 487, 894, 78, percent);
+    drawProgressBar(ctx, 85, 500, 854, 78, percent);
 
     const buffer = canvas.toBuffer("image/png");
     const numA = userA.split("@")[0];
