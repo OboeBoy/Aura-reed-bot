@@ -113,10 +113,10 @@ export default {
     const remoteJid = message.key.remoteJid;
 
     // Determinar el mensaje multimedia objetivo (citado o directo)
-    const quoted =
-      message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-    const targetMessage = quoted
-      ? unwrapMessage(quoted)
+    const quotedInfo = message.message?.extendedTextMessage?.contextInfo;
+    const quotedMessage = quotedInfo?.quotedMessage;
+    const targetMessage = quotedMessage
+      ? unwrapMessage(quotedMessage)
       : unwrapMessage(message.message);
 
     if (!targetMessage) {
@@ -141,19 +141,19 @@ export default {
     );
 
     try {
-      // Descargar el contenido multimedia
+      // Descargar el contenido multimedia de forma segura
       console.log("[Sticker] Descargando contenido multimedia...");
-      const quotedInfo = message.message?.extendedTextMessage?.contextInfo;
-      const downloadMsg = quoted
+      const downloadMsg = quotedMessage
         ? {
             key: {
               remoteJid: quotedInfo.remoteJid || remoteJid,
               id: quotedInfo.stanzaId,
               participant: quotedInfo.participant,
             },
-            message: quoted,
+            message: quotedMessage,
           }
         : message;
+
       const buffer = await downloadMediaMessage(
         downloadMsg,
         "buffer",
@@ -190,6 +190,7 @@ export default {
         await ffmpegSemaphore.run(() =>
           convertToSticker(tempInPath, tempOutPath, false),
         );
+        stickerBuffer = await fs.promises.readFile(tempOutPath);
       } else {
         console.log("[Sticker] Procesando video/GIF animado con ffmpeg...");
 
