@@ -172,12 +172,20 @@ export default {
       // Escribir archivo temporal de entrada
       await fs.promises.writeFile(tempInPath, buffer);
 
+      const isSticker = !!targetMessage.stickerMessage;
       const isVideo =
         !!targetMessage.videoMessage ||
         (targetMessage.documentMessage &&
           targetMessage.documentMessage.mimetype?.startsWith("video/"));
 
-      if (!isVideo) {
+      let stickerBuffer;
+
+      if (isSticker) {
+        console.log(
+          "[Sticker] Sticker detectado; se reenviará reescribiendo sus metadatos...",
+        );
+        stickerBuffer = buffer;
+      } else if (!isVideo) {
         console.log("[Sticker] Procesando imagen estática con ffmpeg...");
         await ffmpegSemaphore.run(() =>
           convertToSticker(tempInPath, tempOutPath, false),
@@ -210,10 +218,9 @@ export default {
             "El video es demasiado largo o pesado para un sticker animado. Intenta con uno de menos de 4 segundos.",
           );
         }
-      }
 
-      // Leer sticker generado
-      const stickerBuffer = await fs.promises.readFile(tempOutPath);
+        stickerBuffer = await fs.promises.readFile(tempOutPath);
+      }
 
       // Obtener el nombre del usuario y formatear metadatos
       const pushName = message.pushName || "Usuario";
