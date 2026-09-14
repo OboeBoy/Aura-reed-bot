@@ -36,7 +36,7 @@ async function searchYouTube(query) {
 }
 
 export default {
-  name: ["ytmp3", "play", "playaudio", "mp3", "yta", "audio"],
+  name: ["ytmp3", "play", "playaudio", "mp3", "yta", "audio", "ytaudio"],
   category: "downloads",
   description: "Busca y descarga audio de YouTube usando API externa",
   execute: async (socket, message, args) => {
