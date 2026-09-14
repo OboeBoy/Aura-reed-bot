@@ -199,7 +199,7 @@ export default {
 
     const percent = Math.floor(Math.random() * 101);
     const heartCenterX = 512;
-    const heartCenterY = 300;
+    const heartCenterY = 320;
     
     drawHeart(ctx, heartCenterX, heartCenterY, 125, "#ff007f", "#050505", 5);
     
@@ -207,7 +207,7 @@ export default {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillStyle = "#050505";
-    ctx.fillText(`${percent}%`, heartCenterX, heartCenterY + 14);
+    ctx.fillText(`${percent}%`, heartCenterX, heartCenterY + 16);
 
     drawProgressBar(ctx, 85, 580, 854, 78, percent);
 
