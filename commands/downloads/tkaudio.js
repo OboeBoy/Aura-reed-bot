@@ -37,56 +37,46 @@ function validateTikTokUrl(url) {
 }
 
 async function DL_TIKTOK(input) {
+  let targetUrl = validateTikTokUrl(input);
+
+  if (!targetUrl) {
+    throw new Error("El enlace proporcionado no es un enlace válido de TikTok.");
+  }
+
   try {
-    let targetUrl = validateTikTokUrl(input);
-
-    if (!targetUrl) {
-      const APIKEY = global.Apis.apiAiya.apikey;
-      const alyaUrl = `https://api.alyacore.xyz/search/tiktok?query=${encodeURIComponent(input)}&key=${APIKEY}`;
-      const { data: alyaData } = await apiAxios.get(alyaUrl, { timeout: 15000 });
-
-      if (alyaData.status && Array.isArray(alyaData.data) && alyaData.data.length > 0) {
-        targetUrl = alyaData.data[0].url;
+    const { data } = await apiAxios.post(
+      "https://www.tikwm.com/api/",
+      { url: targetUrl, count: 12, cursor: 0, web: 1, hd: 1 },
+      {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+          "Accept": "application/json, text/javascript, */*; q=0.01"
+        },
+        timeout: 15000
       }
-    }
+    );
 
-    if (!targetUrl) {
-      throw new Error("No se encontró ningún enlace válido para la búsqueda.");
-    }
-
-    const URL_TIKTOK = `https://api.alyacore.xyz/dl/tiktokv2?url=${encodeURIComponent(targetUrl)}&key=${global.Apis.apiAiya.apikey}`;
-    const dateCreate = (ts) => new Date(Number(ts) * 1000).toLocaleDateString("es-ES");
-
-    const { data } = await apiAxios.get(URL_TIKTOK, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        Accept: "application/json, text/plain, */*",
-        "Connection": "keep-alive"
-      },
-      timeout: 15000,
-    });
-
-    if (data.status && Array.isArray(data.data) && data.data.length > 0) {
-      const r = data;
-      const videoUrl = r.data.find(v => v.type === "watermark")?.url || r.data[0]?.url || r.data[2]?.url;
-      
+    if (data.code === 0 && data.data) {
+      const r = data.data;
       return {
-        video_dl: videoUrl,
-        cover: r.cover || r.data.find(v => v.type === "cover")?.url || "",
+        video_dl: r.wmplay || r.play,
+        cover: r.cover || r.origin_cover,
         title: r.title || "Audio de TikTok",
-        authorNick: r.author?.nickname || r.author?.fullname || "Desconocido",
-        likes: formatter(r.stats?.likes || r.digg_count || 0),
-        views: formatter(r.stats?.views || r.play_count || 0),
-        shares: formatter(r.stats?.share || r.share_count || 0),
-        collect: formatter(r.stats?.download || r.collect_count || 0),
-        comments: formatter(r.stats?.comment || r.comment_count || 0),
-        time: dateCreate(r.taken_at || r.create_time || 0),
-        tk_url: `https://www.tiktok.com/@${r.author?.fullname || "video"}/video/${r.id}`,
+        authorNick: r.author?.nickname || r.author?.unique_id || "Desconocido",
+        likes: formatter(r.digg_count || 0),
+        views: formatter(r.play_count || 0),
+        shares: formatter(r.share_count || 0),
+        collect: formatter(r.collect_count || 0),
+        comments: formatter(r.comment_count || 0),
+        time: new Date(Number(r.create_time) * 1000).toLocaleDateString("es-ES"),
+        tk_url: `https://www.tiktok.com/@${r.author?.unique_id || "video"}/video/${r.id}`
       };
     }
-    throw new Error("No se pudieron extraer los datos del video con AlyaCore.");
+    
+    throw new Error("La API no devolvió el archivo multimedia.");
   } catch (error) {
-    throw new Error(`TikTok DL error: ${error.message}`);
+    throw new Error(`Fallo en la extracción: ${error.message}`);
   }
 }
 
