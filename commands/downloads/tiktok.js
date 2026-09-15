@@ -65,7 +65,6 @@ async function DL_TIKTOK(input) {
 
     if (data.status && Array.isArray(data.data) && data.data.length > 0) {
       const r = data;
-
       return {
         video_dl: r.data[2].url,
         title: r.title || "Video de TikTok",
@@ -118,9 +117,9 @@ async function descargarAArchivo(url, destPath) {
   });
 }
 
-async function processVideoFile(inputP, outP) {
+async function compressHighQuality(inputP, outP) {
   await execAsync(
-    `ffmpeg -y -hwaccel auto -i "${inputP}" -vf "scale='min(1920,iw)':-2,format=nv12" -c:v h264_qsv -preset veryfast -global_quality 28 -look_ahead 1 -c:a aac -b:a 128k -threads 0 "${outP}"`,
+    `ffmpeg -y -hwaccel auto -i "${inputP}" -vf "scale='min(1920,iw)':-2,format=nv12" -c:v h264_qsv -preset slow -global_quality 18 -look_ahead 1 -c:a aac -b:a 192k -threads 0 "${outP}"`,
     { maxBuffer: 1024 * 1024 * 50 }
   );
 }
@@ -157,7 +156,6 @@ export default {
 
     try {
       const result = await DL_TIKTOK(text);
-
       await descargarAArchivo(result.video_dl, inputP);
 
       const sizeMB = fs.statSync(inputP).size / (1024 * 1024);
@@ -187,13 +185,13 @@ export default {
         await socket.sendMessage(
           remoteJid,
           {
-            text: `¡Uy mae! Este video pesa mucho, voy a tener que hacerlo más liviano.\nDame chance ....`,
+            text: `¡Uy mae! Este video pesa más de 60MB. Aguanta un toque, lo estoy comprimiendo para mantener la calidad original, esto puede tardar un poco...`,
           },
           { quoted: message },
         );
 
         try {
-          await processVideoFile(inputP, outP);
+          await compressHighQuality(inputP, outP);
           finalPath = outP;
         } catch (e) {
           finalPath = inputP;
@@ -204,7 +202,6 @@ export default {
         const { stdout: codecInfo } = await execAsync(
           `ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 "${finalPath}"`,
         );
-
         const codec = codecInfo.trim().toLowerCase();
 
         if (codec === "h264") {
@@ -214,14 +211,12 @@ export default {
           );
         } else {
           await execAsync(
-            `ffmpeg -y -hwaccel auto -i "${finalPath}" -vf "format=nv12" -c:v h264_qsv -preset veryfast -global_quality 28 -c:a aac -threads 0 "${whatsappReadyPath}"`,
+            `ffmpeg -y -hwaccel auto -i "${finalPath}" -vf "format=nv12" -c:v h264_qsv -preset slow -global_quality 16 -c:a aac -b:a 256k -threads 0 "${whatsappReadyPath}"`,
             { maxBuffer: 1024 * 1024 * 50 },
           );
         }
-
         finalPath = whatsappReadyPath;
-      } catch (e) {
-      }
+      } catch (e) {}
 
       let caption = `╭〔 🎥 ${fytBold("TIKTOK VIDEO")} 〕━⬣\n\n`;
       caption += `┃ ➥ ${fytBold(result.title)}\n\n`;
@@ -255,12 +250,10 @@ export default {
       await socket.sendMessage(remoteJid, {
         react: { text: "❌", key: message.key },
       });
-
       const errorMsg =
         error.message ||
         JSON.stringify(error) ||
         "Ocurrió un error inesperado.";
-
       await socket.sendMessage(
         remoteJid,
         {
