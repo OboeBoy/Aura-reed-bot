@@ -1,4 +1,3 @@
-import { delay } from 'baileys';
 import { fytBold } from "../../models/TextStyle.js";
 
 const handler = async (m, { conn, text, isOwner }) => {
@@ -11,86 +10,42 @@ const handler = async (m, { conn, text, isOwner }) => {
 	}
 
 	if (!text) {
-		return m.reply(`╭〔 ⚠️ ${fytBold("AURA REED")} 〕⬣\n┃ ❌ ${fytBold("FALTA TEXTO")}\n╰━━━━━━━━━━━━⬣\n\n┃ > Proporciona el texto de reemplazo.\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣`);
+		return m.reply(`╭〔 ⚠️ ${fytBold("AURA REED")} 〕⬣\n┃ ❌ ${fytBold("FALTA TEXTO")}\n╰━━━━━━━━━━━━⬣\n\n┃ > Proporciona el texto falso que quieres ponerle.\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣`);
 	}
 
 	if (!m.chat || !m.chat.endsWith('@g.us')) {
 		return m.reply(`╭〔 ⚠️ ${fytBold("AURA REED")} 〕⬣\n┃ ❌ ${fytBold("SOLO GRUPOS")}\n╰━━━━━━━━━━━━⬣\n\n┃ > Este comando solo funciona en grupos.\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣`);
 	}
 
-	// Extracción robusta del autor real del mensaje citado en grupos de WhatsApp
-	const quotedMsg = m.quoted;
-	const targetParticipant = 
-		quotedMsg.participant || 
-		quotedMsg.key?.participant || 
-		quotedMsg.sender || 
-		quotedMsg.message?.extendedTextMessage?.contextInfo?.participant;
-
-	const stanzaId = quotedMsg.id || quotedMsg.key?.id;
+	// Extraemos el JID real de la víctima
+	const targetParticipant = m.quoted.sender || m.quoted.participant || m.quoted.key?.participant;
 
 	if (!targetParticipant) {
-		return m.reply(`╭〔 ⚠️ ${fytBold("AURA REED")} 〕⬣\n┃ ❌ ${fytBold("ERROR")} \n╰━━━━━━━━━━━━⬣\n\n┃ > No se pudo identificar al autor del mensaje citado.\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣`);
+		return m.reply(`╭〔 ⚠️ ${fytBold("AURA REED")} 〕⬣\n┃ ❌ ${fytBold("ERROR")} \n╰━━━━━━━━━━━━⬣\n\n┃ > No se pudo identificar al objetivo.\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣`);
 	}
 
 	try {
-		const tempId = await conn.relayMessage(
-			m.chat,
+		// MAGIA: El bot envía un carácter invisible (o el texto que quieras), 
+		// pero falsifica por completo el mensaje citado para que diga lo que tú ordenaste.
+		// Esto engaña la interfaz gráfica de WhatsApp a la perfección en Web y Celular.
+		
+		await conn.sendMessage(
+			m.chat, 
+			{ text: `👀` }, // El mensaje del bot (puedes cambiarlo a un carácter invisible '‎' si quieres)
 			{
-				extendedTextMessage: {
-					text: '',
-					contextInfo: {
-						isGroupStatus: true,
-					},
-				},
-			},
-			{}
-		);
-
-		const tempId2 = await conn.relayMessage(
-			m.chat,
-			{
-				protocolMessage: {
+				quoted: {
 					key: {
-						jid: m.chat,
-						fromMe: false, // Forzamos a que el sistema reconozca que la autoría pertenece a un tercero
-						id: tempId,
-						participant: targetParticipant
+						fromMe: false,
+						participant: targetParticipant,
+						id: m.quoted.id // Conservamos el ID original para que parezca 100% real
 					},
-					type: 14,
-					editedMessage: {
-						extendedTextMessage: {
-							text,
-							contextInfo: {
-								isGroupStatus: false,
-								participant: targetParticipant
-							},
-						},
-					},
-				},
-			},
-			{
-				messageId: stanzaId,
+					message: {
+						conversation: text // Aquí inyectamos el texto falso
+					}
+				}
 			}
 		);
 
-		await delay(150);
-
-		await Promise.allSettled([
-			conn.sendMessage(m.chat, {
-				delete: {
-					remoteJid: m.chat,
-					id: tempId,
-					fromMe: true,
-				},
-			}),
-			conn.sendMessage(m.chat, {
-				delete: {
-					remoteJid: m.chat,
-					id: tempId2,
-					fromMe: true,
-				},
-			}),
-		]);
 	} catch (e) {
 		console.error('[fakemsg]', e);
 		await m.reply(`╭〔 ❌ ${fytBold("AURA REED")} 〕⬣\n┃ ⚠️ ${fytBold("ERROR")}\n╰━━━━━━━━━━━━⬣\n\n┃ > ${e?.message || e}\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣`);
