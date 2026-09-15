@@ -1,36 +1,31 @@
 import { delay } from "@whiskeysockets/baileys";
-import isOwnerOrSudo from "../../../lib/isOwner.js";
 import { fytBold } from "../../models/TextStyle.js";
 
-async function fakemsgCommand(sock, msg, args = [], options = {}) {
+async function fakemsgCommand(sock, msg, args = [], isOwner) {
   try {
-    const chatId = msg?.key?.remoteJid || options.chatId;
-    const senderId = options.senderId || msg?.key?.participant || msg?.key?.remoteJid || '';
+    const chatId = msg?.key?.remoteJid;
 
     const hasQuoted = msg?.quoted || msg?.message?.extendedTextMessage?.contextInfo?.quotedMessage || msg?.contextInfo?.quotedMessage;
     
     if (!hasQuoted) {
-      await sock?.sendMessage?.(chatId, { text: `╭〔 ⚠️ ${fytBold("AURA REED")} 〕⬣\n┃ ❌ ${fytBold("FALTA MENSAJE")}\n╰━━━━━━━━━━━━⬣\n\n┃ > Responde a un mensaje para usarlo.\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣` }, { quoted: msg });
+      await sock?.sendMessage(chatId, { text: `╭〔 ⚠️ ${fytBold("AURA REED")} 〕⬣\n┃ ❌ ${fytBold("FALTA MENSAJE")}\n╰━━━━━━━━━━━━⬣\n\n┃ > Responde a un mensaje para usarlo.\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣` }, { quoted: msg });
       return true;
     }
 
     const text = Array.isArray(args) ? args.join(' ') : String(args || '');
     if (!text.trim()) {
-      await sock?.sendMessage?.(chatId, { text: `╭〔 ⚠️ ${fytBold("AURA REED")} 〕⬣\n┃ ❌ ${fytBold("FALTA TEXTO")}\n╰━━━━━━━━━━━━⬣\n\n┃ > Proporciona el texto de reemplazo.\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣` }, { quoted: msg });
+      await sock?.sendMessage(chatId, { text: `╭〔 ⚠️ ${fytBold("AURA REED")} 〕⬣\n┃ ❌ ${fytBold("FALTA TEXTO")}\n╰━━━━━━━━━━━━⬣\n\n┃ > Proporciona el texto de reemplazo.\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣` }, { quoted: msg });
       return true;
     }
 
     if (!chatId || !chatId.endsWith('@g.us')) {
-      await sock?.sendMessage?.(chatId, { text: `╭〔 ⚠️ ${fytBold("AURA REED")} 〕⬣\n┃ ❌ ${fytBold("SOLO GRUPOS")}\n╰━━━━━━━━━━━━⬣\n\n┃ > Este comando solo funciona en grupos.\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣` }, { quoted: msg });
+      await sock?.sendMessage(chatId, { text: `╭〔 ⚠️ ${fytBold("AURA REED")} 〕⬣\n┃ ❌ ${fytBold("SOLO GRUPOS")}\n╰━━━━━━━━━━━━⬣\n\n┃ > Este comando solo funciona en grupos.\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣` }, { quoted: msg });
       return true;
     }
 
-    if (senderId) {
-      const isAllowed = await isOwnerOrSudo(senderId, sock, chatId);
-      if (!isAllowed) {
-        await sock?.sendMessage?.(chatId, { text: `╭〔 ⚠️ ${fytBold("AURA REED")} 〕⬣\n┃ 🚫 ${fytBold("ACCESO DENEGADO")}\n╰━━━━━━━━━━━━⬣\n\n┃ > Solo el owner puede usar este comando.\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣` }, { quoted: msg });
-        return true;
-      }
+    if (!isOwner) {
+      await sock?.sendMessage(chatId, { text: `╭〔 ⚠️ ${fytBold("AURA REED")} 〕⬣\n┃ 🚫 ${fytBold("ACCESO DENEGADO")}\n╰━━━━━━━━━━━━⬣\n\n┃ > Solo el owner puede usar este comando.\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣` }, { quoted: msg });
+      return true;
     }
 
     const stanzaId = msg.quoted?.stanzaId || msg.quoted?.key?.id || msg.key?.id;
@@ -103,13 +98,12 @@ async function fakemsgCommand(sock, msg, args = [], options = {}) {
 }
 
 export default {
-  name: "fakemsg",
-  aliases: ["fake", "fmsg"],
+  name: ["fakemsg", "fake", "fmsg"],
   category: "owner",
   description: "Crea un mensaje falso simulando edición de texto.",
   ownerOnly: true,
 
-  execute: async (socket, message, args) => {
-    await fakemsgCommand(socket, message, args);
+  async execute(sock, m, args, isOwner) {
+    await fakemsgCommand(sock, m, args, isOwner);
   },
 };
