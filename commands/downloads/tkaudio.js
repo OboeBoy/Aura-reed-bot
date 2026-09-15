@@ -6,20 +6,28 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
 import crypto from "crypto";
+import http from "http";
+import https from "https";
+import stream from "stream";
 import formatter from "../../controllers/functions/formatNumbers.js";
 import { fytBold } from "../../models/TextStyle.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const customTemp = path.join(__dirname, "../../tmp");
+const customTemp = fs.existsSync("/dev/shm") ? path.join("/dev/shm", "aura_tmp") : path.join(__dirname, "../../tmp");
 
 process.env.TMPDIR = customTemp;
 process.env.TEMP = customTemp;
 process.env.TMP = customTemp;
 
 const execAsync = promisify(exec);
+const pipelineAsync = promisify(stream.pipeline);
 const tmp = customTemp;
 
 if (!fs.existsSync(tmp)) fs.mkdirSync(tmp, { recursive: true });
+
+const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 100 });
+const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 100 });
+const apiAxios = axios.create({ httpAgent, httpsAgent });
 
 function validateTikTokUrl(url) {
   if (!url) return null;
@@ -34,7 +42,7 @@ async function DL_TIKTOK_AUDIO(input) {
 
     if (!targetUrl) {
       const alyaUrl = `https://api.alyacore.xyz/search/tiktok?query=${encodeURIComponent(input)}&key=oboe`;
-      const { data: alyaData } = await axios.get(alyaUrl, { timeout: 15000 });
+      const { data: alyaData } = await apiAxios.get(alyaUrl, { timeout: 15000 });
 
       if (
         alyaData.status &&
@@ -53,11 +61,12 @@ async function DL_TIKTOK_AUDIO(input) {
     const dateCreate = (ts) =>
       new Date(Number(ts) * 1000).toLocaleDateString("es-ES");
 
-    const { data } = await axios.get(URL_TIKTOK, {
+    const { data } = await apiAxios.get(URL_TIKTOK, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         Accept: "application/json, text/plain, */*",
+        "Connection": "keep-alive"
       },
       timeout: 15000,
     });
@@ -68,7 +77,7 @@ async function DL_TIKTOK_AUDIO(input) {
         r.data.find((item) => item.type === "nowatermark_hd") ||
         r.data.find((item) => item.type === "nowatermark") ||
         r.data.find((item) => item.type === "watermark");
-      const audioUrl = r.music_info?.url || media?.url;
+      const audioUrl = r.music_info?.url || r.music?.play_url || media?.url;
 
       if (!audioUrl) {
         throw new Error("La respuesta no contiene un enlace de audio válido.");
@@ -95,43 +104,22 @@ async function DL_TIKTOK_AUDIO(input) {
 }
 
 async function descargarAArchivo(url, destPath) {
-  const response = await fetch(url, {
+  const response = await apiAxios({
+    url,
+    method: "GET",
+    responseType: "stream",
     headers: {
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Error al descargar el archivo: ${response.statusText}`);
-  }
-
-  const fileStream = fs.createWriteStream(destPath);
-  await new Promise((resolve, reject) => {
-    const reader = response.body.getReader();
-    function pump() {
-      reader
-        .read()
-        .then(({ done, value }) => {
-          if (done) {
-            fileStream.end();
-            resolve();
-            return;
-          }
-          fileStream.write(Buffer.from(value));
-          pump();
-        })
-        .catch(reject);
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      "Connection": "keep-alive"
     }
-    pump();
   });
+  await pipelineAsync(response.data, fs.createWriteStream(destPath));
 }
 
 async function processAudioFile(inputP, outP) {
-  // Extrae el audio del video descargado y lo convierte a mp3 limpio con buen bitrate
   await execAsync(
-    `ffmpeg -y -i "${inputP}" -vn -c:a libmp3lame -b:a 128k "${outP}"`,
-    { maxBuffer: 1024 * 1024 * 10 },
+    `ffmpeg -y -i "${inputP}" -vn -c:a libmp3lame -b:a 320k -threads 0 "${outP}"`,
+    { maxBuffer: 1024 * 1024 * 50 }
   );
 }
 
@@ -167,7 +155,6 @@ export default {
 
     try {
       const result = await DL_TIKTOK_AUDIO(text);
-
       await descargarAArchivo(result.video_dl, inputP);
 
       const sizeMB = fs.statSync(inputP).size / (1024 * 1024);
@@ -188,7 +175,6 @@ export default {
         );
       }
 
-      // Convertimos el video a audio MP3 limpio
       await processAudioFile(inputP, outP);
 
       let caption = `╭〔 🎥 ${fytBold("TIKTOK VIDEO")} 〕━⬣\n\n`;
@@ -205,7 +191,6 @@ export default {
       caption += `┃ > ${fytBold("Url")} › ${result.tk_url}\n`;
       caption += `╰〔 ⚡ ${fytBold("SYSTEM ACTIVE")} 〕⬣`;
 
-      // 1. Enviamos la imagen con los detalles completos
       await socket.sendMessage(
         remoteJid,
         {
@@ -215,16 +200,14 @@ export default {
         { quoted: message },
       );
 
-      // 2. Enviamos el archivo de audio limpio (sin caption problemático)
+      const safeFileName = `${result.authorNick} - ${result.title}.mp3`.replace(/[\r\n/\\?%*:|"<>]/g, "");
+
       await socket.sendMessage(
         remoteJid,
         {
           audio: { url: outP },
-          mimetype: "audio/mp4",
-          fileName: `${result.authorNick} - ${result.title}.mp3`.replace(
-            /[/\\?%*:|"<>]/g,
-            "",
-          ),
+          mimetype: "audio/mpeg",
+          fileName: safeFileName,
           ptt: false,
         },
         { quoted: message },
@@ -234,7 +217,6 @@ export default {
         react: { text: "✅", key: message.key },
       });
     } catch (error) {
-      console.error("Error detallado en tiktok audio:", error);
       await socket.sendMessage(remoteJid, {
         react: { text: "❌", key: message.key },
       });
