@@ -6,6 +6,9 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
 import crypto from "crypto";
+import http from "http";
+import https from "https";
+import stream from "stream";
 import formatter from "../../controllers/functions/formatNumbers.js";
 import { fytBold } from "../../models/TextStyle.js";
 
@@ -17,9 +20,14 @@ process.env.TEMP = customTemp;
 process.env.TMP = customTemp;
 
 const execAsync = promisify(exec);
+const pipelineAsync = promisify(stream.pipeline);
 const tmp = customTemp;
 
 if (!fs.existsSync(tmp)) fs.mkdirSync(tmp, { recursive: true });
+
+const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 100 });
+const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 100 });
+const apiAxios = axios.create({ httpAgent, httpsAgent });
 
 function validateTikTokUrl(url) {
   if (!url) return null;
@@ -35,7 +43,7 @@ async function DL_TIKTOK(input) {
     if (!targetUrl) {
       const APIKEY = global.Apis.apiAiya.apikey;
       const alyaUrl = `https://api.alyacore.xyz/search/tiktok?query=${encodeURIComponent(input)}&key=${APIKEY}`;
-      const { data: alyaData } = await axios.get(alyaUrl, { timeout: 15000 });
+      const { data: alyaData } = await apiAxios.get(alyaUrl, { timeout: 15000 });
 
       if (
         alyaData.status &&
@@ -54,7 +62,7 @@ async function DL_TIKTOK(input) {
     const dateCreate = (ts) =>
       new Date(Number(ts) * 1000).toLocaleDateString("es-ES");
 
-    const { data } = await axios.get(URL_TIKTOK, {
+    const { data } = await apiAxios.get(URL_TIKTOK, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -85,36 +93,16 @@ async function DL_TIKTOK(input) {
 }
 
 async function descargarAArchivo(url, destPath) {
-  const response = await fetch(url, {
+  const response = await apiAxios({
+    url,
+    method: "GET",
+    responseType: "stream",
     headers: {
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Error al descargar el archivo: ${response.statusText}`);
-  }
-
-  const fileStream = fs.createWriteStream(destPath);
-  await new Promise((resolve, reject) => {
-    const reader = response.body.getReader();
-    function pump() {
-      reader
-        .read()
-        .then(({ done, value }) => {
-          if (done) {
-            fileStream.end();
-            resolve();
-            return;
-          }
-          fileStream.write(Buffer.from(value));
-          pump();
-        })
-        .catch(reject);
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      "Connection": "keep-alive"
     }
-    pump();
   });
+  await pipelineAsync(response.data, fs.createWriteStream(destPath));
 }
 
 async function compressHighQuality(inputP, outP) {
