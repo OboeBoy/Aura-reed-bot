@@ -32,7 +32,7 @@ async function searchYouTube(query) {
     throw new Error("No se encontró ningún video.");
   }
 
-  return results[0]; // Retorna el objeto completo del video
+  return results[0];
 }
 
 export default {
@@ -84,10 +84,12 @@ export default {
       const duration = res.data.duration || searchData.duration || "??";
       const views = parseViews(searchData.views);
       const ytURL = searchData.url || finalUrl;
-      const thumbnail =
-        res.data.thumbnail ||
-        searchData.banner ||
-        `https://i.ytimg.com/vi/${extractVideoId(finalUrl)}/hqdefault.jpg`;
+
+      const videoIdFinal = extractVideoId(finalUrl);
+      const thumbnail = videoIdFinal 
+        ? `https://i.ytimg.com/vi/${videoIdFinal}/hqdefault.jpg` 
+        : (res.data.thumbnail || "https://i.imgur.com/3Zcb7io.png");
+
       const audioUrl = res.data.dl;
 
       let caption = `╭〔 🎵 ${fytBold("YOUTUBE PLAY")} 〕━⬣\n\n`;
@@ -102,25 +104,26 @@ export default {
       caption += `┃ > ⌛ Descargando audio...\n`;
       caption += `╰━━〔 ⚡ ${fytBold("SYSTEM ACTIVE")} 〕━━⬣`;
 
-      await socket.sendMessage(
-        remoteJid,
-        { image: { url: thumbnail }, caption },
-        { quoted: message },
-      );
+      try {
+        await socket.sendMessage(
+          remoteJid,
+          { image: { url: thumbnail }, caption },
+          { quoted: message },
+        );
+      } catch (imgError) {
+        console.warn("[YTMeta] No se pudo enviar la miniatura, enviando solo texto informativo...", imgError.message);
+        await socket.sendMessage(
+          remoteJid,
+          { text: caption },
+          { quoted: message },
+        );
+      }
 
-      const audio = await axios.get(audioUrl, {
-        responseType: "arraybuffer",
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          Referer: "https://www.youtube.com/",
-        },
-      });
-
+      // Envío directo por URL evitando la descarga previa en buffer con axios
       await socket.sendMessage(
         remoteJid,
         {
-          audio: audio.data,
+          audio: { url: audioUrl },
           mimetype: "audio/mpeg",
           fileName: `${title.replace(/[<>:"/\\|?*]/g, "")}.mp3`,
         },
