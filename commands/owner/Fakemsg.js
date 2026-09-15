@@ -18,7 +18,10 @@ const handler = async (m, { conn, text, isOwner }) => {
 		return m.reply(`╭〔 ⚠️ ${fytBold("AURA REED")} 〕⬣\n┃ ❌ ${fytBold("SOLO GRUPOS")}\n╰━━━━━━━━━━━━⬣\n\n┃ > Este comando solo funciona en grupos.\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣`);
 	}
 
-	const stanzaId = m.quoted.id; 
+	// Extraemos la información real del usuario al que se está respondiendo
+	const quotedParticipant = m.quoted.sender || m.quoted.participant || m.quoted.key?.participant;
+	const stanzaId = m.quoted.id;
+	const isFromMe = m.quoted.fromMe || false;
 
 	try {
 		const tempId = await conn.relayMessage(
@@ -40,8 +43,9 @@ const handler = async (m, { conn, text, isOwner }) => {
 				protocolMessage: {
 					key: {
 						jid: m.chat,
-						fromMe: true,
+						fromMe: isFromMe,
 						id: tempId,
+						...(quotedParticipant ? { participant: quotedParticipant } : {})
 					},
 					type: 14,
 					editedMessage: {
@@ -49,6 +53,7 @@ const handler = async (m, { conn, text, isOwner }) => {
 							text,
 							contextInfo: {
 								isGroupStatus: false,
+								...(quotedParticipant ? { participant: quotedParticipant } : {})
 							},
 						},
 					},
