@@ -10,9 +10,8 @@ import formatter from "../../controllers/functions/formatNumbers.js";
 import { fytBold } from "../../models/TextStyle.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const customTemp = path.join(__dirname, "../../tmp");
+const customTemp = fs.existsSync("/dev/shm") ? path.join("/dev/shm", "aura_tmp") : path.join(__dirname, "../../tmp");
 
-// Forzamos al sistema de Node a usar la carpeta local y evitar el /tmp del sistema
 process.env.TMPDIR = customTemp;
 process.env.TEMP = customTemp;
 process.env.TMP = customTemp;
@@ -98,7 +97,6 @@ async function descargarAArchivo(url, destPath) {
     throw new Error(`Error al descargar el archivo: ${response.statusText}`);
   }
 
-  // Descarga optimizada haciendo streaming directo al archivo sin saturar la RAM con buffers gigantes
   const fileStream = fs.createWriteStream(destPath);
   await new Promise((resolve, reject) => {
     const reader = response.body.getReader();
@@ -122,8 +120,8 @@ async function descargarAArchivo(url, destPath) {
 
 async function processVideoFile(inputP, outP) {
   await execAsync(
-    `ffmpeg -y -i "${inputP}" -vf "scale='min(1920,iw)':-2" -c:v libx264 -preset ultrafast -crf 28 -c:a aac -b:a 128k "${outP}"`,
-    { maxBuffer: 1024 * 1024 * 10 },
+    `ffmpeg -y -hwaccel auto -i "${inputP}" -vf "scale='min(1920,iw)':-2,format=nv12" -c:v h264_qsv -preset veryfast -global_quality 28 -look_ahead 1 -c:a aac -b:a 128k -threads 0 "${outP}"`,
+    { maxBuffer: 1024 * 1024 * 50 }
   );
 }
 
@@ -198,40 +196,31 @@ export default {
           await processVideoFile(inputP, outP);
           finalPath = outP;
         } catch (e) {
-          console.error(
-            "No se pudo procesar el video, se manda el original:",
-            e.message,
-          );
           finalPath = inputP;
         }
       }
 
-      // Reempaquetado inteligente - detecta codec y convierte si es necesario
       try {
-        // Detecta el codec actual
         const { stdout: codecInfo } = await execAsync(
           `ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 "${finalPath}"`,
         );
 
         const codec = codecInfo.trim().toLowerCase();
 
-        // Si YA es H.264, solo remux sin tocar nada
         if (codec === "h264") {
           await execAsync(
-            `ffmpeg -y -i "${finalPath}" -c copy -movflags +faststart "${whatsappReadyPath}"`,
-            { maxBuffer: 1024 * 1024 * 10 },
+            `ffmpeg -y -i "${finalPath}" -c copy -movflags +faststart -threads 0 "${whatsappReadyPath}"`,
+            { maxBuffer: 1024 * 1024 * 50 },
           );
         } else {
-          // Si es HEVC u otro codec, convierte a H.264
           await execAsync(
-            `ffmpeg -y -i "${finalPath}" -c:v libx264 -preset ultrafast -c:a aac "${whatsappReadyPath}"`,
-            { maxBuffer: 1024 * 1024 * 10 },
+            `ffmpeg -y -hwaccel auto -i "${finalPath}" -vf "format=nv12" -c:v h264_qsv -preset veryfast -global_quality 28 -c:a aac -threads 0 "${whatsappReadyPath}"`,
+            { maxBuffer: 1024 * 1024 * 50 },
           );
         }
 
         finalPath = whatsappReadyPath;
       } catch (e) {
-        console.error("Reempaquetado fallido:", e.message);
       }
 
       let caption = `╭〔 🎥 ${fytBold("TIKTOK VIDEO")} 〕━⬣\n\n`;
@@ -263,7 +252,6 @@ export default {
         react: { text: "✅", key: message.key },
       });
     } catch (error) {
-      console.error("Error detallado en tiktok:", error);
       await socket.sendMessage(remoteJid, {
         react: { text: "❌", key: message.key },
       });
