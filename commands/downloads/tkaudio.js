@@ -36,19 +36,16 @@ function validateTikTokUrl(url) {
   return match ? match[0] : null;
 }
 
-async function DL_TIKTOK_AUDIO(input) {
+async function DL_TIKTOK(input) {
   try {
     let targetUrl = validateTikTokUrl(input);
 
     if (!targetUrl) {
-      const alyaUrl = `https://api.alyacore.xyz/search/tiktok?query=${encodeURIComponent(input)}&key=oboe`;
+      const APIKEY = global.Apis.apiAiya.apikey;
+      const alyaUrl = `https://api.alyacore.xyz/search/tiktok?query=${encodeURIComponent(input)}&key=${APIKEY}`;
       const { data: alyaData } = await apiAxios.get(alyaUrl, { timeout: 15000 });
 
-      if (
-        alyaData.status &&
-        Array.isArray(alyaData.data) &&
-        alyaData.data.length > 0
-      ) {
+      if (alyaData.status && Array.isArray(alyaData.data) && alyaData.data.length > 0) {
         targetUrl = alyaData.data[0].url;
       }
     }
@@ -57,14 +54,12 @@ async function DL_TIKTOK_AUDIO(input) {
       throw new Error("No se encontró ningún enlace válido para la búsqueda.");
     }
 
-    const URL_TIKTOK = `https://www.tikwm.com/api/?url=${encodeURIComponent(targetUrl)}`;
-    const dateCreate = (ts) =>
-      new Date(Number(ts) * 1000).toLocaleDateString("es-ES");
+    const URL_TIKTOK = `https://api.alyacore.xyz/dl/tiktokv2?url=${encodeURIComponent(targetUrl)}&key=${global.Apis.apiAiya.apikey}`;
+    const dateCreate = (ts) => new Date(Number(ts) * 1000).toLocaleDateString("es-ES");
 
     const { data } = await apiAxios.get(URL_TIKTOK, {
       headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         Accept: "application/json, text/plain, */*",
         "Connection": "keep-alive"
       },
@@ -73,33 +68,25 @@ async function DL_TIKTOK_AUDIO(input) {
 
     if (data.status && Array.isArray(data.data) && data.data.length > 0) {
       const r = data;
-      const media =
-        r.data.find((item) => item.type === "nowatermark_hd") ||
-        r.data.find((item) => item.type === "nowatermark") ||
-        r.data.find((item) => item.type === "watermark");
-      const audioUrl = r.music_info?.url || r.music?.play_url || media?.url;
-
-      if (!audioUrl) {
-        throw new Error("La respuesta no contiene un enlace de audio válido.");
-      }
-
+      const videoUrl = r.data.find(v => v.type === "watermark")?.url || r.data[0]?.url || r.data[2]?.url;
+      
       return {
-        video_dl: audioUrl,
-        cover: r.cover || r.origin_cover,
+        video_dl: videoUrl,
+        cover: r.cover || r.data.find(v => v.type === "cover")?.url || "",
         title: r.title || "Audio de TikTok",
         authorNick: r.author?.nickname || r.author?.fullname || "Desconocido",
-        likes: r.stats?.likes || formatter(r.digg_count || 0),
-        views: r.stats?.views || formatter(r.play_count || 0),
-        shares: r.stats?.share || formatter(r.share_count || 0),
-        collect: r.stats?.download || formatter(r.collect_count || 0),
-        comments: r.stats?.comment || formatter(r.comment_count || 0),
-        time: r.taken_at || dateCreate(r.create_time || 0),
-        tk_url: `https://www.tiktok.com/@${r.author?.nickname || "video"}/video/${r.id}`,
+        likes: formatter(r.stats?.likes || r.digg_count || 0),
+        views: formatter(r.stats?.views || r.play_count || 0),
+        shares: formatter(r.stats?.share || r.share_count || 0),
+        collect: formatter(r.stats?.download || r.collect_count || 0),
+        comments: formatter(r.stats?.comment || r.comment_count || 0),
+        time: dateCreate(r.taken_at || r.create_time || 0),
+        tk_url: `https://www.tiktok.com/@${r.author?.fullname || "video"}/video/${r.id}`,
       };
     }
-    throw new Error("No se pudieron extraer los datos del video con TikWM.");
+    throw new Error("No se pudieron extraer los datos del video con AlyaCore.");
   } catch (error) {
-    throw new Error(`TikTok Audio DL error: ${error.message}`);
+    throw new Error(`TikTok DL error: ${error.message}`);
   }
 }
 
@@ -128,8 +115,7 @@ const MAX_INPUT_MB = 500;
 export default {
   name: ["tka", "ttaudio", "tkmusic", "tiktokaudio", "tta"],
   category: "downloads",
-  description:
-    "Descarga el audio de un video de TikTok manteniendo metadatos y formato de audio.",
+  description: "Descarga el audio de un video de TikTok.",
 
   execute: async (socket, message, args) => {
     const remoteJid = message.key.remoteJid;
@@ -154,7 +140,7 @@ export default {
     const outP = path.join(tmp, `tta_out_${id}.mp3`);
 
     try {
-      const result = await DL_TIKTOK_AUDIO(text);
+      const result = await DL_TIKTOK(text);
       await descargarAArchivo(result.video_dl, inputP);
 
       const sizeMB = fs.statSync(inputP).size / (1024 * 1024);
