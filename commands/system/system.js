@@ -15,6 +15,17 @@ function formatTime(seconds) {
   return `${h}h ${m}m ${s}s`;
 }
 
+function readNumber(filePath) {
+  try {
+    const value = fs.readFileSync(filePath, "utf8").trim();
+    if (value === "max" || !value) return null;
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  } catch {
+    return null;
+  }
+}
+
 function getMemoryInfo() {
   try {
     // Intentar Cgroups v2 (Sistemas modernos de contenedores/Pterodactyl)
@@ -22,31 +33,21 @@ function getMemoryInfo() {
       fs.existsSync("/sys/fs/cgroup/memory.max") &&
       fs.existsSync("/sys/fs/cgroup/memory.current")
     ) {
-      let total = fs.readFileSync("/sys/fs/cgroup/memory.max", "utf8").trim();
-      let used = fs
-        .readFileSync("/sys/fs/cgroup/memory.current", "utf8")
-        .trim();
+      const total = readNumber("/sys/fs/cgroup/memory.max");
+      const used = readNumber("/sys/fs/cgroup/memory.current");
 
-      if (total !== "max" && !isNaN(Number(total)) && Number(total) > 0) {
-        return { total: Number(total), used: Number(used) };
+      if (total > 0 && used >= 0) {
+        return { total, used, source: "contenedor" };
       }
     }
 
     // Intentar Cgroups v1 (Sistemas clásicos)
     if (fs.existsSync("/sys/fs/cgroup/memory/memory.limit_in_bytes")) {
-      const total = fs
-        .readFileSync("/sys/fs/cgroup/memory/memory.limit_in_bytes", "utf8")
-        .trim();
-      const used = fs
-        .readFileSync("/sys/fs/cgroup/memory/memory.usage_in_bytes", "utf8")
-        .trim();
+      const total = readNumber("/sys/fs/cgroup/memory/memory.limit_in_bytes");
+      const used = readNumber("/sys/fs/cgroup/memory/memory.usage_in_bytes");
 
-      if (
-        !isNaN(Number(total)) &&
-        Number(total) < 9223372036854771712 &&
-        Number(total) > 0
-      ) {
-        return { total: Number(total), used: Number(used) };
+      if (total > 0 && total < 9223372036854771712 && used >= 0) {
+        return { total, used, source: "contenedor" };
       }
     }
   } catch (e) {
@@ -56,7 +57,46 @@ function getMemoryInfo() {
   // Fallback: Si el contenedor no expone sus límites, usamos la memoria del bot actual como referencia limpia
   const used = process.memoryUsage().rss;
   const total = os.totalmem(); // Mantiene el total si no hay restricción visible
-  return { total, used };
+  return { total, used, source: "host" };
+}
+
+function getCpuUsage(sampleMs = 100) {
+  const before = os.cpus();
+  const beforeTotal = before.reduce(
+    (total, cpu) =>
+      total + Object.values(cpu.times).reduce((sum, time) => sum + time, 0),
+    0,
+  );
+  const beforeIdle = before.reduce((total, cpu) => total + cpu.times.idle, 0);
+
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      const after = os.cpus();
+      const afterTotal = after.reduce(
+        (total, cpu) =>
+          total + Object.values(cpu.times).reduce((sum, time) => sum + time, 0),
+        0,
+      );
+      const afterIdle = after.reduce((total, cpu) => total + cpu.times.idle, 0);
+      const totalDelta = afterTotal - beforeTotal;
+      const idleDelta = afterIdle - beforeIdle;
+
+      resolve(
+        totalDelta > 0 ? ((totalDelta - idleDelta) / totalDelta) * 100 : 0,
+      );
+    }, sampleMs);
+  });
+}
+
+function getDiskInfo() {
+  try {
+    const stats = fs.statfsSync(".");
+    const total = Number(stats.blocks) * Number(stats.bsize);
+    const free = Number(stats.bavail) * Number(stats.bsize);
+    return { total, free, used: Math.max(total - free, 0) };
+  } catch {
+    return null;
+  }
 }
 
 export default {
@@ -92,7 +132,7 @@ export default {
     const ramTotal = memory.total;
     const ramUsed = memory.used;
     const ramFree = ramTotal - ramUsed;
-    const ramBot = process.memoryUsage().heapUsed; // Mantiene el heapUsed nativo de tu bot anterior
+    const ramBot = process.memoryUsage().rss;
 
     const ramPercent =
       ramTotal > 0 ? ((ramUsed / ramTotal) * 100).toFixed(1) : "0.0";
@@ -100,6 +140,8 @@ export default {
     // ── UPTIME ──
     const botUp = process.uptime();
     const sysUp = os.uptime();
+    const cpuUsage = await getCpuUsage();
+    const disk = getDiskInfo();
 
     // ── ENTORNO ──
     const nodeVersion = process.version;
@@ -121,10 +163,17 @@ export default {
     text += `┃ > ${fytBold("Libre:")} ${formatBytes(ramFree)} GB\n`;
     text += `┃ > ${fytBold("Bot usa:")} ${formatBytes(ramBot)} GB\n\n`;
 
+    text += `┣━━━━ ${fytBold("RECURSOS")} ━━━━⬣\n`;
+    text += `┃ > ${fytBold("CPU actual:")} ${cpuUsage.toFixed(1)}%\n`;
+    if (disk) {
+      text += `┃ > ${fytBold("Disco usado:")} ${formatBytes(disk.used)} GB / ${formatBytes(disk.total)} GB\n`;
+    }
+    text += `┃ > ${fytBold("Origen RAM:")} ${memory.source}\n\n`;
+
     // Sección UPTIME
     text += `┣━━━━ ${fytBold("UPTIME")} ━━━━⬣\n`;
     text += `┃ > ${fytBold("Bot activo:")} ${formatTime(botUp)}\n`;
-    text += `┃ > ${fytBold("Servidor:")} ${formatTime(sysUp)}\n\n`;
+    text += `┃ > ${fytBold("Host encendido:")} ${formatTime(sysUp)}\n\n`;
 
     // Sección ENTORNO
     text += `┣━━━ ${fytBold("ENTORNO")} ━━━━⬣\n`;
