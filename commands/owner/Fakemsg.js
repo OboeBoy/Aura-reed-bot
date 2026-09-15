@@ -1,5 +1,5 @@
 import { delay } from "@whiskeysockets/baileys";
-import isOwnerOrSudo from "../lib/isOwner.js";
+import isOwnerOrSudo from "../../../lib/isOwner.js";
 import { fytBold } from "../../models/TextStyle.js";
 
 async function fakemsgCommand(sock, msg, args = [], options = {}) {
@@ -103,7 +103,8 @@ async function fakemsgCommand(sock, msg, args = [], options = {}) {
 }
 
 export default {
-  name: ["fakemsg", "fake", "fmsg"],
+  name: "fakemsg",
+  aliases: ["fake", "fmsg"],
   category: "owner",
   description: "Crea un mensaje falso simulando edición de texto.",
   ownerOnly: true,
