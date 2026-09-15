@@ -18,10 +18,19 @@ const handler = async (m, { conn, text, isOwner }) => {
 		return m.reply(`╭〔 ⚠️ ${fytBold("AURA REED")} 〕⬣\n┃ ❌ ${fytBold("SOLO GRUPOS")}\n╰━━━━━━━━━━━━⬣\n\n┃ > Este comando solo funciona en grupos.\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣`);
 	}
 
-	// Extraemos la información real del usuario al que se está respondiendo
-	const quotedParticipant = m.quoted.sender || m.quoted.participant || m.quoted.key?.participant;
-	const stanzaId = m.quoted.id;
-	const isFromMe = m.quoted.fromMe || false;
+	// Extracción robusta del autor real del mensaje citado en grupos de WhatsApp
+	const quotedMsg = m.quoted;
+	const targetParticipant = 
+		quotedMsg.participant || 
+		quotedMsg.key?.participant || 
+		quotedMsg.sender || 
+		quotedMsg.message?.extendedTextMessage?.contextInfo?.participant;
+
+	const stanzaId = quotedMsg.id || quotedMsg.key?.id;
+
+	if (!targetParticipant) {
+		return m.reply(`╭〔 ⚠️ ${fytBold("AURA REED")} 〕⬣\n┃ ❌ ${fytBold("ERROR")} \n╰━━━━━━━━━━━━⬣\n\n┃ > No se pudo identificar al autor del mensaje citado.\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣`);
+	}
 
 	try {
 		const tempId = await conn.relayMessage(
@@ -43,9 +52,9 @@ const handler = async (m, { conn, text, isOwner }) => {
 				protocolMessage: {
 					key: {
 						jid: m.chat,
-						fromMe: isFromMe,
+						fromMe: false, // Forzamos a que el sistema reconozca que la autoría pertenece a un tercero
 						id: tempId,
-						...(quotedParticipant ? { participant: quotedParticipant } : {})
+						participant: targetParticipant
 					},
 					type: 14,
 					editedMessage: {
@@ -53,7 +62,7 @@ const handler = async (m, { conn, text, isOwner }) => {
 							text,
 							contextInfo: {
 								isGroupStatus: false,
-								...(quotedParticipant ? { participant: quotedParticipant } : {})
+								participant: targetParticipant
 							},
 						},
 					},
@@ -64,7 +73,7 @@ const handler = async (m, { conn, text, isOwner }) => {
 			}
 		);
 
-		await delay(100);
+		await delay(150);
 
 		await Promise.allSettled([
 			conn.sendMessage(m.chat, {
