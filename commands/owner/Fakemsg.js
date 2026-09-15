@@ -1,61 +1,62 @@
 import { fytBold } from "../../models/TextStyle.js";
 
-const handler = async (m, { conn, text, isOwner }) => {
-	if (!isOwner) {
-		return m.reply(`╭〔 ⚠️ ${fytBold("AURA REED")} 〕⬣\n┃ 🚫 ${fytBold("ACCESO DENEGADO")}\n╰━━━━━━━━━━━━⬣\n\n┃ > Solo el owner puede usar este comando.\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣`);
-	}
+export default {
+  name: ["fakemsg", "fake", "fmsg"],
+  category: "owner",
+  description: "Falsifica la cita de un mensaje para poner palabras en la boca de otro.",
+  ownerOnly: true,
 
-	if (!m.quoted) {
-		return m.reply(`╭〔 ⚠️ ${fytBold("AURA REED")} 〕⬣\n┃ ❌ ${fytBold("FALTA MENSAJE")}\n╰━━━━━━━━━━━━⬣\n\n┃ > Responde a un mensaje para usarlo.\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣`);
-	}
+  async execute(sock, m, args, isOwner) {
+    try {
+      const chatId = m?.key?.remoteJid;
 
-	if (!text) {
-		return m.reply(`╭〔 ⚠️ ${fytBold("AURA REED")} 〕⬣\n┃ ❌ ${fytBold("FALTA TEXTO")}\n╰━━━━━━━━━━━━⬣\n\n┃ > Proporciona el texto falso que quieres ponerle.\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣`);
-	}
+      if (!isOwner) {
+        return await sock.sendMessage(chatId, { text: `╭〔 ⚠️ ${fytBold("AURA REED")} 〕⬣\n┃ 🚫 ${fytBold("ACCESO DENEGADO")}\n╰━━━━━━━━━━━━⬣\n\n┃ > Solo el owner puede usar este comando.\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣` }, { quoted: m });
+      }
 
-	if (!m.chat || !m.chat.endsWith('@g.us')) {
-		return m.reply(`╭〔 ⚠️ ${fytBold("AURA REED")} 〕⬣\n┃ ❌ ${fytBold("SOLO GRUPOS")}\n╰━━━━━━━━━━━━⬣\n\n┃ > Este comando solo funciona en grupos.\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣`);
-	}
+      // Extraer el contexto del mensaje (Baileys puro)
+      const contextInfo = m?.message?.extendedTextMessage?.contextInfo || m?.message?.imageMessage?.contextInfo || {};
+      const targetParticipant = contextInfo.participant;
+      const stanzaId = contextInfo.stanzaId;
+      
+      if (!targetParticipant || !stanzaId) {
+        return await sock.sendMessage(chatId, { text: `╭〔 ⚠️ ${fytBold("AURA REED")} 〕⬣\n┃ ❌ ${fytBold("FALTA MENSAJE")}\n╰━━━━━━━━━━━━⬣\n\n┃ > Responde a un mensaje para usarlo.\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣` }, { quoted: m });
+      }
 
-	// Extraemos el JID real de la víctima
-	const targetParticipant = m.quoted.sender || m.quoted.participant || m.quoted.key?.participant;
+      const text = Array.isArray(args) ? args.join(' ') : String(args || '');
+      if (!text.trim()) {
+        return await sock.sendMessage(chatId, { text: `╭〔 ⚠️ ${fytBold("AURA REED")} 〕⬣\n┃ ❌ ${fytBold("FALTA TEXTO")}\n╰━━━━━━━━━━━━⬣\n\n┃ > Proporciona el texto falso que quieres inyectar.\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣` }, { quoted: m });
+      }
 
-	if (!targetParticipant) {
-		return m.reply(`╭〔 ⚠️ ${fytBold("AURA REED")} 〕⬣\n┃ ❌ ${fytBold("ERROR")} \n╰━━━━━━━━━━━━⬣\n\n┃ > No se pudo identificar al objetivo.\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣`);
-	}
+      if (!chatId || !chatId.endsWith('@g.us')) {
+        return await sock.sendMessage(chatId, { text: `╭〔 ⚠️ ${fytBold("AURA REED")} 〕⬣\n┃ ❌ ${fytBold("SOLO GRUPOS")}\n╰━━━━━━━━━━━━⬣\n\n┃ > Este comando solo funciona en grupos.\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣` }, { quoted: m });
+      }
 
-	try {
-		// MAGIA: El bot envía un carácter invisible (o el texto que quieras), 
-		// pero falsifica por completo el mensaje citado para que diga lo que tú ordenaste.
-		// Esto engaña la interfaz gráfica de WhatsApp a la perfección en Web y Celular.
-		
-		await conn.sendMessage(
-			m.chat, 
-			{ text: `👀` }, // El mensaje del bot (puedes cambiarlo a un carácter invisible '‎' si quieres)
-			{
-				quoted: {
-					key: {
-						fromMe: false,
-						participant: targetParticipant,
-						id: m.quoted.id // Conservamos el ID original para que parezca 100% real
-					},
-					message: {
-						conversation: text // Aquí inyectamos el texto falso
-					}
-				}
-			}
-		);
+      // MAGIA: Enviar el mensaje con la cita falsificada apuntando al objetivo real
+      await sock.sendMessage(
+        chatId, 
+        { text: `👀` }, // Puedes cambiar estos ojitos por un carácter invisible como '‎' si quieres que el bot no diga nada arriba.
+        {
+          quoted: {
+            key: {
+              fromMe: false,
+              participant: targetParticipant,
+              id: stanzaId 
+            },
+            message: {
+              conversation: text // Texto inyectado a la víctima
+            }
+          }
+        }
+      );
 
-	} catch (e) {
-		console.error('[fakemsg]', e);
-		await m.reply(`╭〔 ❌ ${fytBold("AURA REED")} 〕⬣\n┃ ⚠️ ${fytBold("ERROR")}\n╰━━━━━━━━━━━━⬣\n\n┃ > ${e?.message || e}\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣`);
-	}
+    } catch (error) {
+      console.error('[fakemsg]', error);
+      if (sock && m) {
+        await sock.sendMessage(m?.key?.remoteJid, {
+          text: `╭〔 ❌ ${fytBold("AURA REED")} 〕⬣\n┃ ⚠️ ${fytBold("ERROR")}\n╰━━━━━━━━━━━━⬣\n\n┃ > ${error?.message || error}\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣`
+        }, { quoted: m }).catch(() => {});
+      }
+    }
+  }
 };
-
-handler.help = ['fakemsg', 'fake', 'fmsg'];
-handler.tags = ['owner'];
-handler.command = /^(fakemsg|fake|fmsg)$/i;
-handler.group = true;
-handler.owner = true;
-
-export default handler;
