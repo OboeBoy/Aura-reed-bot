@@ -1,5 +1,4 @@
 import { fytBold } from "../../models/TextStyle.js";
-import { getDBSync, saveDB } from "../../models/db.js";
 
 export default {
   name: ["modself"],
@@ -7,16 +6,15 @@ export default {
   description: "Activa o desactiva el modo owner global para todos los grupos.",
   ownerOnly: true,
 
-  async execute(sock, message, args, { prefix, db }) {
+  async execute(sock, message, args, { prefix, db, saveDB }) {
     const remoteJid = message.key.remoteJid;
-    const globalDb = getDBSync();
     const action = args[0]?.toLowerCase();
 
     if (!action) {
-      const status = globalDb.selfMode ? "activado" : "desactivado";
+      const status = db.modSelfMode ? "activado" : "desactivado";
       const text =
         `╭〔 👑 ${fytBold("OWNER SYSTEM")} 〕⬣\n` +
-        `┃ ${globalDb.selfMode ? "🔒️" : "🔓️"} ${fytBold("MODO OWNER GLOBAL")}\n` +
+        `┃ ${db.modSelfMode ? "🔒️" : "🔓️"} ${fytBold("MODO OWNER GLOBAL")}\n` +
         `╰━━━━━━━━━━━━⬣\n\n` +
         `┃ > El modo owner global está *${status}*.\n` +
         `┃ > Afecta todos los grupos y subbots.\n` +
@@ -39,11 +37,8 @@ export default {
       );
     }
 
-    globalDb.selfMode = enabled;
-    if (db && typeof db === "object") {
-      db.selfMode = enabled;
-    }
-    await saveDB(globalDb, { immediate: true });
+    db.modSelfMode = enabled;
+    await saveDB(db, { immediate: true });
 
     const text =
       `╭〔 👑 ${fytBold("OWNER SYSTEM")} 〕⬣\n` +

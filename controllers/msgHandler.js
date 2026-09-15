@@ -297,7 +297,10 @@ export async function handleMessage(sock, m, db, saveDB) {
   const sender = m.key.fromMe ? botId : jidRemitente;
   const isOwner = owners.some((owner) => cleanJid(owner) === cleanJid(sender));
 
-  if (globalDb.selfMode && !isOwner) return;
+  const groupSelfMode = isGroup && db.groups?.[remoteJid]?.selfMode;
+  const modSelfMode = db.modSelfMode;
+
+  if ((groupSelfMode || modSelfMode) && !isOwner) return;
 
   // 🚫 VERIFICACIÓN DE CHAT BANEADO (BANCHAT)
   const isChatBanned = db.chats?.[remoteJid]?.isBanned;

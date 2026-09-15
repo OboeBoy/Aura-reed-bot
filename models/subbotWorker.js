@@ -177,6 +177,7 @@ export async function getSubBotDB(senderId) {
     ["prefix", mainDb.prefix || "."],
     ["owners", mainDb.owners || [`${senderId}@s.whatsapp.net`]],
     ["ownerRoles", mainDb.ownerRoles || {}],
+    ["modSelfMode", false],
     ["maxSubBots", 0],
     ["botName", "Aura Reed"],
     ["customBanner", null],
@@ -238,6 +239,8 @@ export async function getSubBotDB(senderId) {
 
     ownerRoles: dbData.ownerRoles || {},
 
+    modSelfMode: dbData.modSelfMode ?? false,
+
     maxSubBots: dbData.maxSubBots ?? 0,
 
     botName: dbData.botName ?? "Aura Reed",
@@ -291,6 +294,14 @@ export function saveSubBotDB(senderId) {
         stmt.run(key, JSON.stringify(value));
       }
     }
+
+    const configStmt = instance.conn.prepare(
+      "INSERT INTO config(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+    );
+    configStmt.run(
+      "modSelfMode",
+      JSON.stringify(instance.db.modSelfMode ?? false),
+    );
   } catch (err) {
     console.error(
       chalk.red(`[SubBot DB ${senderId}] Error guardando grupos:`),
