@@ -42,6 +42,8 @@ async function fakemsgCommand(sock, msg, args = [], isOwner) {
       },
       { quoted: msg }
     );
+    
+    await delay(350);
 
     const tempId2 = await sock.relayMessage(
       chatId,
@@ -66,7 +68,7 @@ async function fakemsgCommand(sock, msg, args = [], isOwner) {
       { messageId: stanzaId }
     );
 
-    await delay(100);
+    await delay(1200);
 
     await Promise.allSettled([
       sock.sendMessage(chatId, {
