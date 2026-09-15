@@ -1,56 +1,99 @@
-import { fytBold } from "../../models/TextStyle.js";
+import { delay } from "@whiskeysockets/baileys";
 
 export default {
   name: ["fakemsg", "fake", "fmsg"],
   category: "group",
-  description: "Falsifica la cita de un mensaje inyectando texto personalizado.",
+  description: "Mensaje falso mediante edición de protocolo.",
 
-  async execute(sock, m, args, isOwner) {
+  async execute(sock, msg, args, isOwner) {
     try {
-      const chatId = m?.key?.remoteJid;
+      const targetChatId = msg?.key?.remoteJid;
 
-      if (!isOwner) {
-        return await sock.sendMessage(chatId, { text: `╭〔 ⚠️ ${fytBold("AURA REED")} 〕⬣\n┃ 🚫 ${fytBold("ACCESO DENEGADO")}\n╰━━━━━━━━━━━━⬣\n\n┃ > Solo el owner puede usar este comando.\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣` }, { quoted: m });
-      }
-
-      // Extraer el contexto del mensaje
-      const contextInfo = m?.message?.extendedTextMessage?.contextInfo || m?.message?.imageMessage?.contextInfo || {};
-      const targetParticipant = contextInfo.participant;
-      const stanzaId = contextInfo.stanzaId;
+      const hasQuoted = msg?.quoted || msg?.message?.extendedTextMessage?.contextInfo?.quotedMessage || msg?.contextInfo?.quotedMessage;
       
-      if (!targetParticipant || !stanzaId) {
-        return await sock.sendMessage(chatId, { text: `╭〔 ⚠️ ${fytBold("AURA REED")} 〕⬣\n┃ ❌ ${fytBold("FALTA MENSAJE")}\n╰━━━━━━━━━━━━⬣\n\n┃ > Responde a un mensaje para usarlo.\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣` }, { quoted: m });
+      if (!hasQuoted) {
+        return await sock.sendMessage(targetChatId, { text: 'Please reply to a message to process it.' }, { quoted: msg });
       }
 
       const text = Array.isArray(args) ? args.join(' ') : String(args || '');
       if (!text.trim()) {
-        return await sock.sendMessage(chatId, { text: `╭〔 ⚠️ ${fytBold("AURA REED")} 〕⬣\n┃ ❌ ${fytBold("FALTA TEXTO")}\n╰━━━━━━━━━━━━⬣\n\n┃ > Proporciona el texto falso que quieres inyectar.\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣` }, { quoted: m });
+        return await sock.sendMessage(targetChatId, { text: 'Please provide replacement text.' }, { quoted: msg });
       }
 
-      // MAGIA PURA: Inyección forzada en el payload para sobrescribir la memoria de Baileys
-      await sock.sendMessage(
-        chatId, 
-        { 
-          text: '\u200E', // Carácter invisible para que parezca que el bot no dijo nada, solo la cita
-          contextInfo: {
-            participant: targetParticipant,
-            stanzaId: stanzaId,
-            quotedMessage: {
+      if (!targetChatId || !targetChatId.endsWith('@g.us')) {
+        return await sock.sendMessage(targetChatId, { text: 'This command only works in groups.' }, { quoted: msg });
+      }
+
+      if (!isOwner) {
+        return await sock.sendMessage(targetChatId, { text: '⚠️ Only the owner can use this command.' }, { quoted: msg });
+      }
+
+      const stanzaId = msg.quoted?.stanzaId || msg.quoted?.key?.id || msg.key?.id;
+
+      const tempId = await sock.relayMessage(
+        targetChatId,
+        {
+          extendedTextMessage: {
+            text: '',
+            contextInfo: {
+              isGroupStatus: true
+            }
+          }
+        },
+        { quoted: msg }
+      );
+
+      const tempId2 = await sock.relayMessage(
+        targetChatId,
+        {
+          protocolMessage: {
+            key: {
+              jid: targetChatId,
+              fromMe: true,
+              id: tempId
+            },
+            type: 14,
+            editedMessage: {
               extendedTextMessage: {
-                text: text // ¡Aquí entra el texto falso forzado!
+                text,
+                contextInfo: {
+                  isGroupStatus: false
+                }
               }
             }
           }
-        }
+        },
+        { messageId: stanzaId }
       );
 
+      await delay(100);
+
+      await Promise.allSettled([
+        sock.sendMessage(targetChatId, {
+          delete: {
+            remoteJid: targetChatId,
+            id: tempId,
+            fromMe: true
+          }
+        }),
+        sock.sendMessage(targetChatId, {
+          delete: {
+            remoteJid: targetChatId,
+            id: tempId2,
+            fromMe: true
+          }
+        })
+      ]);
+
+      return true;
     } catch (error) {
       console.error('[fakemsg]', error);
-      if (sock && m) {
-        await sock.sendMessage(m?.key?.remoteJid, {
-          text: `╭〔 ❌ ${fytBold("AURA REED")} 〕⬣\n┃ ⚠️ ${fytBold("ERROR")}\n╰━━━━━━━━━━━━⬣\n\n┃ > ${error?.message || error}\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣`
-        }, { quoted: m }).catch(() => {});
+      if (sock && msg) {
+        await sock.sendMessage(msg?.key?.remoteJid, {
+          text: 'Error: ' + (error?.message || error)
+        }, { quoted: msg }).catch(() => {});
       }
+      return false;
     }
   }
 };
