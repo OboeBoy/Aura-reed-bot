@@ -14,7 +14,6 @@ import { fytBold } from "../../models/TextStyle.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Usar la carpeta tmp local del proyecto para evitar saturar /dev/shm
 const customTemp = path.join(__dirname, "../../tmp");
 
 process.env.TMPDIR = customTemp;
@@ -37,6 +36,13 @@ function validateTikTokUrl(url) {
   const match = url.match(regex);
   return match ? match[0] : null;
 }
+
+const formatSize = (bytes) => {
+  if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(2) + " GB";
+  if (bytes >= 1048576) return (bytes / 1048576).toFixed(2) + " MB";
+  if (bytes >= 1024) return (bytes / 1024).toFixed(2) + " KB";
+  return bytes + " B";
+};
 
 async function DL_TIKTOK(input) {
   try {
@@ -107,7 +113,7 @@ async function descargarAArchivo(url, destPath) {
   await pipelineAsync(response.data, fs.createWriteStream(destPath));
 }
 
-const MAX_INPUT_MB = 100; // Reducido para prevenir saturación en hosting
+const MAX_INPUT_MB = 100;
 
 export default {
   name: ["tk", "tt", "ttv", "tiktok", "tkmp4"],
@@ -141,6 +147,7 @@ export default {
       await descargarAArchivo(result.video_dl, inputP);
 
       const sizeMB = fs.statSync(inputP).size / (1024 * 1024);
+      const initialSizeB = fs.statSync(inputP).size;
 
       if (sizeMB > MAX_INPUT_MB) {
         await socket.sendMessage(remoteJid, {
@@ -177,8 +184,29 @@ export default {
         }
         finalPath = whatsappReadyPath;
       } catch (e) {
-        finalPath = inputP; // Si falla el reempaquetado, manda el original
+        finalPath = inputP;
       }
+
+      const finalSizeB = fs.statSync(finalPath).size;
+
+      let diskTotalStr = "Desconocido";
+      let diskFreeStr = "Desconocido";
+
+      try {
+        if (typeof fs.statfsSync === "function") {
+          const st = fs.statfsSync(tmp);
+          diskTotalStr = formatSize(st.blocks * st.bsize);
+          diskFreeStr = formatSize(st.bavail * st.bsize);
+        } else {
+          const { stdout } = await execAsync(`df -k "${tmp}"`);
+          const lines = stdout.trim().split("\n");
+          if (lines.length > 1) {
+            const parts = lines[1].trim().split(/\s+/);
+            diskTotalStr = formatSize(parseInt(parts[1]) * 1024);
+            diskFreeStr = formatSize(parseInt(parts[3]) * 1024);
+          }
+        }
+      } catch (e) {}
 
       let caption = `╭〔 🎥 ${fytBold("TIKTOK VIDEO")} 〕━⬣\n\n`;
       caption += `┃ ➥ ${fytBold(result.title)}\n\n`;
@@ -190,6 +218,10 @@ export default {
       caption += `┃ > ${fytBold("Comentarios")} › ${result.comments}\n`;
       caption += `┃ > ${fytBold("Favoritos")} › ${result.collect}\n`;
       caption += `┃ > ${fytBold("Compartidos")} › ${result.shares}\n`;
+      caption += `┣━━━━━━━━━━━━⬣\n`;
+      caption += `┃ > ${fytBold("Peso Original")} › ${formatSize(initialSizeB)}\n`;
+      caption += `┃ > ${fytBold("Peso Optimizado")} › ${formatSize(finalSizeB)}\n`;
+      caption += `┃ > ${fytBold("Almacenamiento")} › Libre ${diskFreeStr} / Total ${diskTotalStr}\n`;
       caption += `┣━━━━━━━━━━━━⬣\n`;
       caption += `┃ > ${fytBold("Url")} › ${result.tk_url}\n`;
       caption += `╰〔 ⚡ ${fytBold("SYSTEM ACTIVE")} 〕⬣`;
@@ -224,7 +256,6 @@ export default {
         { quoted: message },
       );
     } finally {
-      // Limpieza segura de archivos temporales individuales
       try { if (fs.existsSync(inputP)) fs.unlinkSync(inputP); } catch {}
       try { if (fs.existsSync(whatsappReadyPath)) fs.unlinkSync(whatsappReadyPath); } catch {}
     }
