@@ -13,7 +13,9 @@ import formatter from "../../controllers/functions/formatNumbers.js";
 import { fytBold } from "../../models/TextStyle.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const customTemp = fs.existsSync("/dev/shm") ? path.join("/dev/shm", "aura_tmp") : path.join(__dirname, "../../tmp");
+
+// Usar la carpeta tmp local del proyecto para evitar saturar /dev/shm
+const customTemp = path.join(__dirname, "../../tmp");
 
 process.env.TMPDIR = customTemp;
 process.env.TEMP = customTemp;
@@ -105,14 +107,7 @@ async function descargarAArchivo(url, destPath) {
   await pipelineAsync(response.data, fs.createWriteStream(destPath));
 }
 
-async function compressHighQuality(inputP, outP) {
-  await execAsync(
-    `ffmpeg -y -hwaccel auto -i "${inputP}" -vf "scale='min(1920,iw)':-2,format=nv12" -c:v h264_qsv -preset slow -global_quality 18 -look_ahead 1 -c:a aac -b:a 192k -threads 0 "${outP}"`,
-    { maxBuffer: 1024 * 1024 * 50 }
-  );
-}
-
-const MAX_INPUT_MB = 500;
+const MAX_INPUT_MB = 100; // Reducido para prevenir saturación en hosting
 
 export default {
   name: ["tk", "tt", "ttv", "tiktok", "tkmp4"],
@@ -139,7 +134,6 @@ export default {
 
     const id = crypto.randomBytes(8).toString("hex");
     const inputP = path.join(tmp, `tt_${id}.mp4`);
-    const outP = path.join(tmp, `tt_${id}_out.mp4`);
     const whatsappReadyPath = path.join(tmp, `tt_${id}_wa.mp4`);
 
     try {
@@ -152,39 +146,17 @@ export default {
         await socket.sendMessage(remoteJid, {
           react: { text: "❌", key: message.key },
         });
-        try {
-          fs.unlinkSync(inputP);
-        } catch {}
+        try { fs.unlinkSync(inputP); } catch {}
         return await socket.sendMessage(
           remoteJid,
           {
-            text: `😦 !Mae Ponete serio! 💀🙏\n Este video pesa mas que una vieja de Kilos Mortales.`,
+            text: `😦 !Mae Ponete serio! 💀🙏\n Este video pesa mas de ${MAX_INPUT_MB}MB y satura el servidor.`,
           },
           { quoted: message },
         );
       }
 
       let finalPath = inputP;
-
-      if (sizeMB > 60) {
-        await socket.sendMessage(remoteJid, {
-          react: { text: "⚠️", key: message.key },
-        });
-        await socket.sendMessage(
-          remoteJid,
-          {
-            text: `¡Uy mae! Este video pesa más de 60MB. Aguanta un toque, lo estoy comprimiendo para mantener la calidad original, esto puede tardar un poco...`,
-          },
-          { quoted: message },
-        );
-
-        try {
-          await compressHighQuality(inputP, outP);
-          finalPath = outP;
-        } catch (e) {
-          finalPath = inputP;
-        }
-      }
 
       try {
         const { stdout: codecInfo } = await execAsync(
@@ -199,12 +171,14 @@ export default {
           );
         } else {
           await execAsync(
-            `ffmpeg -y -hwaccel auto -i "${finalPath}" -vf "format=nv12" -c:v h264_qsv -preset slow -global_quality 16 -c:a aac -b:a 256k -threads 0 "${whatsappReadyPath}"`,
+            `ffmpeg -y -i "${finalPath}" -c:v libx264 -preset ultrafast -c:a aac -b:a 128k -threads 0 "${whatsappReadyPath}"`,
             { maxBuffer: 1024 * 1024 * 50 },
           );
         }
         finalPath = whatsappReadyPath;
-      } catch (e) {}
+      } catch (e) {
+        finalPath = inputP; // Si falla el reempaquetado, manda el original
+      }
 
       let caption = `╭〔 🎥 ${fytBold("TIKTOK VIDEO")} 〕━⬣\n\n`;
       caption += `┃ ➥ ${fytBold(result.title)}\n\n`;
@@ -250,15 +224,9 @@ export default {
         { quoted: message },
       );
     } finally {
-      try {
-        if (fs.existsSync(inputP)) fs.unlinkSync(inputP);
-      } catch {}
-      try {
-        if (fs.existsSync(outP)) fs.unlinkSync(outP);
-      } catch {}
-      try {
-        if (fs.existsSync(whatsappReadyPath)) fs.unlinkSync(whatsappReadyPath);
-      } catch {}
+      // Limpieza segura de archivos temporales individuales
+      try { if (fs.existsSync(inputP)) fs.unlinkSync(inputP); } catch {}
+      try { if (fs.existsSync(whatsappReadyPath)) fs.unlinkSync(whatsappReadyPath); } catch {}
     }
   },
 };
