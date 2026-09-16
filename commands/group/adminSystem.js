@@ -2,6 +2,7 @@ import { fytBold } from "../../models/TextStyle.js";
 
 const status = (value) => (value ? "✅ Activado" : "❌ Desactivado");
 const onlyAdmin = (value) => (value ? "🔒 Solo Admins" : "🔓 Todos");
+const onlyAdminMenbers = (value) => (value ? "🔓 Todos" : "🔒 Solo Admins");
 
 
 const formatDuration = (seconds) => {
