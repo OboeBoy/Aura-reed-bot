@@ -1,4 +1,5 @@
 import chalk from "chalk";
+import { getContentType } from "@whiskeysockets/baileys";
 
 export function cmdLog({
   numeroReal,
@@ -9,13 +10,58 @@ export function cmdLog({
   jidRemitente,
   pushName,
   groupMetadata,
-  prefix, // Lo recibimos en el objeto de parámetros
+  prefix,
   sock,
+  msg,
 }) {
-  // Si no hay comando, detenemos la ejecución aquí para mejorar rendimiento
-  if (!commandName) return;
+  let tipoMensajeInfo = "";
+  let contenidoMensaje = text || "";
+  let esMedio = false;
 
-  // Aseguramos que prefix tenga un valor por defecto si no llega nada
+  if (msg?.message) {
+    let innerMessage = msg.message;
+    let isViewOnce = false;
+
+    if (innerMessage.viewOnceMessage) {
+      isViewOnce = true;
+      innerMessage = innerMessage.viewOnceMessage.message;
+    } else if (innerMessage.viewOnceMessageV2) {
+      isViewOnce = true;
+      innerMessage = innerMessage.viewOnceMessageV2.message;
+    }
+
+    const rawType = getContentType(innerMessage) || "desconocido";
+    tipoMensajeInfo = isViewOnce ? `${rawType} (Vista Única 👁️)` : rawType;
+
+    // Detectar si es contenido multimedia (imagen, video, audio, documento, sticker)
+    const tiposMedios = [
+      "imageMessage",
+      "videoMessage",
+      "audioMessage",
+      "documentMessage",
+      "stickerMessage",
+      "ptvMessage" // videomensaje circular
+    ];
+
+    if (tiposMedios.includes(rawType) || isViewOnce) {
+      esMedio = true;
+    }
+
+    // Extraer texto o descripción si no viene en la variable text principal
+    if (!contenidoMensaje) {
+      contenidoMensaje =
+        innerMessage.conversation ||
+        innerMessage.extendedTextMessage?.text ||
+        innerMessage.imageMessage?.caption ||
+        innerMessage.videoMessage?.caption ||
+        innerMessage.documentMessage?.caption ||
+        "";
+    }
+  }
+
+  // Si no hay comando, ni tipo de mensaje, ni texto, detenemos
+  if (!commandName && !tipoMensajeInfo && !contenidoMensaje) return;
+
   const cmdPrefix = prefix || "#";
 
   const fecha = new Date().toLocaleString("es-CR", {
@@ -23,8 +69,21 @@ export function cmdLog({
   });
   const senderNumber = jidRemitente ? jidRemitente.split("@")[0] : numeroReal;
 
-  const tipoAccion = chalk.cyan.bold(" COMANDO ");
-  const contenido = chalk.yellow.bold(`${cmdPrefix}${commandName}`);
+  let tipoAccion = chalk.blue.bold(" MENSAJE ");
+  if (commandName) {
+    tipoAccion = chalk.cyan.bold(" COMANDO ");
+  } else if (esMedio) {
+    tipoAccion = chalk.magenta.bold(" MEDIO 🖼️ ");
+  }
+
+  let contenido = chalk.gray("(Sin contenido)");
+  if (commandName) {
+    contenido = chalk.yellow.bold(`${cmdPrefix}${commandName}`);
+  } else if (contenidoMensaje) {
+    contenido = chalk.white(contenidoMensaje);
+  } else if (esMedio) {
+    contenido = chalk.italic.gray(`[Archivo Multimedia: ${tipoMensajeInfo}]`);
+  }
 
   const chatTipo = isGroup ? chalk.green("Grupo") : chalk.magenta("Privado");
   const rolRango = rango ? rango.toUpperCase() : "USUARIO 👤";
@@ -39,6 +98,15 @@ export function cmdLog({
   if (isGroup) {
     const nombreGrupo = groupMetadata?.subject || "Grupo Desconocido";
     lineasDinamicas += `${chalk.blue.bold("│")} ${chalk.white("🏠 ")} ${chalk.bold("Grupo:")}     ${chalk.white(nombreGrupo)}\n`;
+  }
+
+  if (tipoMensajeInfo) {
+    lineasDinamicas += `${chalk.blue.bold("│")} ${chalk.white("📦 ")} ${chalk.bold("Tipo:")}      ${chalk.cyan(tipoMensajeInfo)}\n`;
+  }
+
+  if (contenidoMensaje && !commandName) {
+    const textoCortado = contenidoMensaje.length > 40 ? contenidoMensaje.substring(0, 37) + "..." : contenidoMensaje;
+    lineasDinamicas += `${chalk.blue.bold("│")} ${chalk.white("📝 ")} ${chalk.bold("Texto:")}     ${chalk.italic(textoCortado)}\n`;
   }
 
   lineasDinamicas += `${chalk.blue.bold("│")} ${chalk.white("🕒 ")} ${chalk.bold("Fecha:")}     ${chalk.white(fecha)}\n`;

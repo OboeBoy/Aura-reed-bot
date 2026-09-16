@@ -8,30 +8,39 @@ function getWarnDate() {
 }
 
 async function registerStatusWarning(sock, remoteJid, userJid, db) {
-  if (!remoteJid || !remoteJid.endsWith("@g.us") || !userJid) return;
+  const groupData = db.groups[remoteJid];
 
-  const group = db.groups?.[remoteJid];
-  if (!group) return;
+  // Aseguramos que existan las estructuras necesarias en la BD del grupo
+  if (!groupData.warns) groupData.warns = {};
+  if (!groupData.warnLimit) groupData.warnLimit = 3; // Límite por defecto si no está definido
 
-  if (!group.warns) group.warns = {};
-  if (!group.warns[userJid]) group.warns[userJid] = [];
+  // Compatibilidad con la estructura anterior, que guardaba las advertencias
+  // directamente como un arreglo por usuario.
+  const storedWarns = groupData.warns[userJid];
+  const userWarns = Array.isArray(storedWarns)
+    ? { count: storedWarns.length, history: storedWarns }
+    : storedWarns || { count: 0, history: [] };
 
-  group.warns[userJid].push({
-    reason: "Estado mencionando el grupo no permitido",
+  userWarns.count = Number.isFinite(userWarns.count)
+    ? userWarns.count
+    : userWarns.history.length;
+  if (!Array.isArray(userWarns.history)) userWarns.history = [];
+  groupData.warns[userJid] = userWarns;
+  userWarns.count += 1;
+  userWarns.history.push({
+    reason: "Publicar estado mencionando el grupo (Anti-Estado)",
     date: getWarnDate(),
   });
 
-  const warnLimit = group.warnLimit || 3;
-  const count = group.warns[userJid].length;
-
-  // CORREGIDO: comillas corregidas y split("@")[0] añadido con éxito
+  const limit = groupData.warnLimit;
+  const currentCount = userWarns.count;
   const adminText =
     "╭〔 ⚠️ 𝐀𝐔𝐑𝐀 𝐑𝐄𝐄𝐃 〕⬣\n" +
     "┃ 🚫 𝐄𝐒𝐓𝐀𝐃𝐎 𝐍𝐎 𝐏𝐄𝐑𝐌𝐈𝐓𝐈𝐃𝐎\n" +
     "╰━━━━━━━━━━━━⬣\n\n" +
     `┃ 👤 Usuario: @${userJid.split("@")[0]}\n` +
-    `┃ 📊 Warns: [ ${count}/${warnLimit} ]\n` +
-    "┃ 🛡️ Razón: Estado mencionando un grupo\n" +
+    `┃ 📊 Warns: [ ${currentCount}/${limit} ]\n` +
+    "┃ 🛡️ Razón: Estado mencionando el grupo\n" +
     `┃ ⏰ Fecha: ${getWarnDate()}\n\n` +
     "╰〔 ⚡ 𝐒𝐘𝐒𝐓𝐄𝐌 〕⬣";
 
@@ -40,17 +49,18 @@ async function registerStatusWarning(sock, remoteJid, userJid, db) {
     mentions: [userJid],
   });
 
-  saveDB(db);
-
-  if (count >= warnLimit) {
+  if (currentCount >= limit) {
     try {
       await sock.groupParticipantsUpdate(remoteJid, [userJid], "remove");
-      group.warns[userJid] = [];
-      saveDB(db);
+      // Limpiamos las advertencias del usuario tras el baneo/expulsión
+      delete groupData.warns[userJid];
     } catch (e) {
-      console.error("Error al remover participante:", e);
+      console.error("No se pudo expulsar al usuario (¿El bot es admin?):", e);
     }
   }
+
+  // Guardamos cambios en la base de datos
+  await saveDB(db);
 }
 
 // Borra la notificación intrusa que llegó al chat del grupo
@@ -102,10 +112,15 @@ export async function handleAntiStatus(sock, message, getDBFn = getDB) {
   // Verificar si la función está encendida en la Base de Datos para este grupo
   if (!db.groups[remoteJid].antiStatus) return;
 
-  // En el aviso viene en statusKey; en V2 viene como participante del mensaje.
+  // Dependiendo de la versión de Baileys, el autor puede venir en statusKey
+  // o directamente en el participante del mensaje de notificación.
   const statusKey = groupStatusMention?.statusKey || groupStatusV2?.statusKey;
-  const userJid = statusKey?.remoteJid || message.key.participant;
-  if (groupStatusMention && !statusKey?.id) return;
+  const userJid = [
+    statusKey?.participant,
+    message.key.participant,
+    message.participant,
+    statusKey?.remoteJid,
+  ].find((jid) => jid && !jid.endsWith("@broadcast"));
   if (!userJid) return;
 
   // CORREGIDO: Sanitización estricta del ID del propio bot para evitar bucles o auto-baneos
