@@ -34,22 +34,14 @@ async function registerStatusWarning(sock, remoteJid, userJid, db) {
 
   const limit = groupData.warnLimit;
   const currentCount = userWarns.count;
-  const adminText =
-    "╭〔 ⚠️ 𝐀𝐔𝐑𝐀 𝐑𝐄𝐄𝐃 〕⬣\n" +
-    "┃ 🚫 𝐄𝐒𝐓𝐀𝐃𝐎 𝐍𝐎 𝐏𝐄𝐑𝐌𝐈𝐓𝐈𝐃𝐎\n" +
-    "╰━━━━━━━━━━━━⬣\n\n" +
-    `┃ 👤 Usuario: @${userJid.split("@")[0]}\n` +
-    `┃ 📊 Warns: [ ${currentCount}/${limit} ]\n` +
-    "┃ 🛡️ Razón: Estado mencionando el grupo\n" +
-    `┃ ⏰ Fecha: ${getWarnDate()}\n\n` +
-    "╰〔 ⚡ 𝐒𝐘𝐒𝐓𝐄𝐌 〕⬣";
-
-  await sock.sendMessage(remoteJid, {
-    text: adminText,
-    mentions: [userJid],
-  });
 
   if (currentCount >= limit) {
+    // Si llega al límite, advertimos y expulsamos (kick)
+    await sock.sendMessage(remoteJid, {
+      text: `⚠️ @${userJid.split("@")[0]} ha alcanzado el límite de advertencias (${currentCount}/${limit}) por enviar estados con menciones al grupo. Procedo a expulsarlo.`,
+      mentions: [userJid],
+    });
+
     try {
       await sock.groupParticipantsUpdate(remoteJid, [userJid], "remove");
       // Limpiamos las advertencias del usuario tras el baneo/expulsión
@@ -57,6 +49,12 @@ async function registerStatusWarning(sock, remoteJid, userJid, db) {
     } catch (e) {
       console.error("No se pudo expulsar al usuario (¿El bot es admin?):", e);
     }
+  } else {
+    // Si aún no llega al límite, solo enviamos la advertencia
+    await sock.sendMessage(remoteJid, {
+      text: `⚠️ @${userJid.split("@")[0]} está prohibido mencionar el grupo en estados.\n📌 Advertencia: *${currentCount}/${limit}*`,
+      mentions: [userJid],
+    });
   }
 
   // Guardamos cambios en la base de datos
