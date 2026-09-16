@@ -18,13 +18,17 @@ export default {
       const interactiveMsg = {
         viewOnceMessage: {
           message: {
+            messageContextInfo: {
+              deviceListMetadata: {},
+              deviceListMetadataVersion: 2
+            },
             interactiveMessage: {
               header: {
                 title: "🎁 *SORPRESA MISTERIOSA* 🎁",
                 hasMediaAttachment: false
               },
               body: {
-                text: "¡Felicidades! Tienes una caja sorpresa pendiente por abrir. Elige una de las opciones abajo para revelar tu premio en el grupo."
+                text: "¡Felicidades! Tienes una caja sorpresa pendiente por abrir.\nElige una de las opciones abajo para revelar tu premio en el grupo."
               },
               footer: {
                 text: "Aura System - Sistema Interactivo"
@@ -35,24 +39,25 @@ export default {
                     name: "quick_reply",
                     buttonParamsJson: JSON.stringify({
                       display_text: "YO AMO EL PENE 🍆",
-                      id: "btn_trampa_1"
+                      id: "trampa_1"
                     })
                   },
                   {
                     name: "quick_reply",
                     buttonParamsJson: JSON.stringify({
                       display_text: "ME ENCANTA EL PENE 🤤",
-                      id: "btn_trampa_2"
+                      id: "trampa_2"
                     })
                   }
-                ]
+                ],
+                messageParamsJson: ""
               }
             }
           }
         }
       };
 
-      await sock.relayMessage(chatId, interactiveMsg, {});
+      await sock.relayMessage(chatId, interactiveMsg, { messageId: m.key.id });
 
     } catch (error) {
       if (sock && m) {
