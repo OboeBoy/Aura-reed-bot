@@ -1,6 +1,8 @@
 import { fytBold } from "../../models/TextStyle.js";
 
 const status = (value) => (value ? "✅ Activado" : "❌ Desactivado");
+const onlyAdmin = (value) => (value ? "🔒 Solo Admins" : "🔓 Todos");
+
 
 const formatDuration = (seconds) => {
   if (!seconds) return "Desactivados";
@@ -42,10 +44,10 @@ export default {
     text += `┃ 🏷️ ${fytBold(metadata.subject || "Grupo")}\n`;
     text += `╰━━━━━━━━━━━━⬣\n\n`;
     text += `┣━━〔 🛡️ ${fytBold("CONFIGURACIÓN")} 〕━⬣\n\n`;
-    text += `┃ 🔒 ${fytBold("Edición de grupo")} › ${status(metadata.restrict)}\n`;
+    text += `┃ 🔒 ${fytBold("Edición del grupo")} › ${onlyAdmin(metadata.restrict)}\n`;
     text += `┃ 📢 ${fytBold("Grupo Cerrado")} › ${status(metadata.announce)}\n`;
     text += `┃ ✅ ${fytBold("Aprobación para unirse")} › ${status(metadata.joinApprovalMode)}\n`;
-    text += `┃ ➕ ${fytBold("Añadir miembros")} › ${status(metadata.memberAddMode)}\n`;
+    text += `┃ ➕ ${fytBold("Añadir miembros")} › ${onlyAdmin(metadata.memberAddMode)}\n`;
     text += `┃ ⏳ ${fytBold("Mensajes temporales")} › ${ephemeralDuration}\n\n`;
     text += `┣━━〔 🛡️ ${fytBold("FILTROS")} 〕━⬣\n\n`;
     text += `┃ 🔗 ${fytBold("Antilink")} › ${status(groupSettings.antilink)}\n`;
