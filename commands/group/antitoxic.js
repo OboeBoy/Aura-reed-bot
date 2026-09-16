@@ -1,4 +1,5 @@
 import fs from "fs";
+import { ensureGroup } from "../../models/groupDb.js";
 import { fytBold } from "../../models/TextStyle.js";
 
 const badWordsData = JSON.parse(
@@ -27,17 +28,11 @@ export default {
       return await socket.sendMessage(remoteJid, { text }, { quoted: message });
     }
 
-    if (!db.groups[remoteJid]) {
-      db.groups[remoteJid] = {
-        antilink: false,
-        warnLimit: 3,
-        warns: {},
-        activity: {},
-        onlyAdmin: false,
-        antitoxic: false,
-        botOn: true,
-      };
-    }
+    const group = ensureGroup(db, remoteJid);
+    group.antitoxic ??= false;
+    group.warnLimit ??= 3;
+    group.warns ??= {};
+    group.activity ??= {};
 
     const status = args[0]?.toLowerCase();
 
@@ -99,8 +94,10 @@ export default {
 
   middleware: async (socket, m, { db, saveDB, isAdmin, isBotAdmin, text }) => {
     const remoteJid = m.key.remoteJid;
-    if (!remoteJid.endsWith("@g.us") || !db.groups[remoteJid]?.antitoxic)
-      return;
+    if (!remoteJid?.endsWith("@g.us") || !db?.groups) return;
+
+    const group = ensureGroup(db, remoteJid);
+    if (!group.antitoxic) return;
 
     if (m.key.fromMe || m.key.participant === socket.user?.id) return;
 
@@ -135,25 +132,28 @@ async function handleToxic(socket, m, level, db, saveDB, userMessage) {
   const user = m.key.participant || remoteJid;
   const reason = level.reason;
 
+  const group = ensureGroup(db, remoteJid);
+
   try {
     await socket.sendMessage(remoteJid, { delete: m.key });
   } catch (e) {}
 
-  if (!db.groups[remoteJid].warns) db.groups[remoteJid].warns = {};
-  if (!db.groups[remoteJid].warns[user]) db.groups[remoteJid].warns[user] = [];
+  if (!group.warns || typeof group.warns !== "object") group.warns = {};
+  if (!group.warns[user]) group.warns[user] = [];
 
   const date = new Date().toLocaleDateString("es-CR", {
     timeZone: "America/Costa_Rica",
   });
 
-  db.groups[remoteJid].warns[user].push({
+  group.warns[user].push({
     reason: `Toxicidad: ${reason}`,
     date,
   });
+  group.warnLimit ??= 3;
   saveDB(db);
 
-  const limit = db.groups[remoteJid].warnLimit || 3;
-  const count = db.groups[remoteJid].warns[user].length;
+  const limit = group.warnLimit || 3;
+  const count = group.warns[user].length;
   const botJid = socket.user.id.split(":")[0] + "@s.whatsapp.net";
 
   let responseText = `╭〔 ⚠️ ${fytBold("ANTI-TOXIC SYSTEM")} 〕⬣\n`;
