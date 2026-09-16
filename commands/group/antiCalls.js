@@ -14,8 +14,15 @@ async function registerCallWarning(sock, remoteJid, userJid, db) {
   const group = ensureGroup(db, remoteJid);
 
   if (!group.warns || typeof group.warns !== "object") group.warns = {};
-  if (!group.warns[userJid]) group.warns[userJid] = [];
 
+  const legacyWarns = group.warns[userJid];
+  const normalizedWarns = Array.isArray(legacyWarns)
+    ? legacyWarns
+    : Array.isArray(legacyWarns?.history)
+      ? legacyWarns.history
+      : [];
+
+  group.warns[userJid] = normalizedWarns;
   group.warns[userJid].push({
     reason: "Intento de llamada en grupo",
     date: getWarnDate(),
