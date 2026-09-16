@@ -151,13 +151,13 @@ export default {
 
       if (sizeMB > MAX_INPUT_MB) {
         await socket.sendMessage(remoteJid, {
-          react: { text: "❌", key: message.key },
+          react: { text: "💀", key: message.key },
         });
         try { fs.unlinkSync(inputP); } catch {}
         return await socket.sendMessage(
           remoteJid,
           {
-            text: `😦 !Mae Ponete serio! 💀🙏\n Este video pesa mas de ${MAX_INPUT_MB}MB y satura el servidor.`,
+            text: `😦 !Mae Ponete serio! 💀🙏\n Este video pesa mas de ${MAX_INPUT_MB}MB pesa mas que una chamaca de kilos mortales`,
           },
           { quoted: message },
         );
