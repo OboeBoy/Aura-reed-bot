@@ -48,7 +48,7 @@ export default {
     text += `┃ 🔒 ${fytBold("Edición del grupo")} › ${onlyAdmin(metadata.restrict)}\n`;
     text += `┃ 📢 ${fytBold("Grupo Cerrado")} › ${status(metadata.announce)}\n`;
     text += `┃ ✅ ${fytBold("Aprobación para unirse")} › ${status(metadata.joinApprovalMode)}\n`;
-    text += `┃ ➕ ${fytBold("Añadir miembros")} › ${onlyAdmin(metadata.memberAddMode)}\n`;
+    text += `┃ ➕ ${fytBold("Añadir miembros")} › ${onlyAdminMenbers(metadata.memberAddMode)}\n`;
     text += `┃ ⏳ ${fytBold("Mensajes temporales")} › ${ephemeralDuration}\n\n`;
     text += `┣━━〔 🛡️ ${fytBold("FILTROS")} 〕━⬣\n\n`;
     text += `┃ 🔗 ${fytBold("Antilink")} › ${status(groupSettings.antilink)}\n`;
