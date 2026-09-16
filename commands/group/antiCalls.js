@@ -1,4 +1,5 @@
 import { saveDB, getDB } from "../../models/db.js";
+import { ensureGroup } from "../../models/groupDb.js";
 import { fytBold } from "../../models/TextStyle.js";
 
 function getWarnDate() {
@@ -10,10 +11,9 @@ function getWarnDate() {
 async function registerCallWarning(sock, remoteJid, userJid, db) {
   if (!remoteJid || !remoteJid.endsWith("@g.us") || !userJid) return;
 
-  const group = db.groups?.[remoteJid];
-  if (!group) return;
+  const group = ensureGroup(db, remoteJid);
 
-  if (!group.warns) group.warns = {};
+  if (!group.warns || typeof group.warns !== "object") group.warns = {};
   if (!group.warns[userJid]) group.warns[userJid] = [];
 
   group.warns[userJid].push({
@@ -66,7 +66,10 @@ export async function handleAntiCalls(sock, call, getDBFn = getDB) {
 
   const groupJid = call.groupJid || call.chatId || call.from;
   const db = await getDBFn();
-  if (!db?.groups?.[groupJid]?.antiCalls) return;
+  if (!db?.groups) return;
+
+  const group = ensureGroup(db, groupJid);
+  if (!group?.antiCalls) return;
 
   const userJid = call.from || call.chatId;
   if (userJid && userJid === sock.user?.id) return;
@@ -77,7 +80,7 @@ export async function handleAntiCalls(sock, call, getDBFn = getDB) {
       await sock.rejectCall(call.id, callFrom);
     }
     await registerCallWarning(sock, groupJid, userJid, db);
-} catch (error) {
+  } catch (error) {
     console.error("Error al manejar la llamada entrante:", error);
   }
 }
@@ -101,18 +104,12 @@ export default {
       return await socket.sendMessage(remoteJid, { text }, { quoted: message });
     }
 
-    if (!db.groups[remoteJid]) {
-      db.groups[remoteJid] = {
-        antilink: false,
-        warnLimit: 3,
-        warns: {},
-        activity: {},
-        onlyAdmin: false,
-        antitoxic: false,
-        antiCalls: false,
-        botOn: true,
-      };
-    }
+    const group = ensureGroup(db, remoteJid);
+    group.antiCalls ??= false;
+    group.antiStatus ??= false;
+    group.warnLimit ??= 3;
+    group.warns ??= {};
+    group.activity ??= {};
 
     const status = args[0]?.toLowerCase();
 

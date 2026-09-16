@@ -9,6 +9,8 @@ export const DEFAULT_GROUP = {
   activity: {},
   onlyAdmin: false,
   antitoxic: false,
+  antiCalls: false,
+  antiStatus: false,
   welcome: false,
   disabledCategories: ["nsfw"],
   botOn: true,
@@ -47,19 +49,28 @@ export function stripEconomyFromUsers(users = {}) {
 
 export function ensureGroup(db, remoteJid) {
   if (!db.groups) db.groups = {};
-  if (!db.groups[remoteJid]) {
+
+  const group = db.groups[remoteJid];
+  if (!group) {
     db.groups[remoteJid] = {
       ...DEFAULT_GROUP,
       warns: {},
       activity: {},
       users: {},
     };
-  } else {
-    if (!db.groups[remoteJid].activity) db.groups[remoteJid].activity = {};
-    if (!db.groups[remoteJid].users) db.groups[remoteJid].users = {};
-    if (!db.groups[remoteJid].warns) db.groups[remoteJid].warns = {};
+    return db.groups[remoteJid];
   }
-  return db.groups[remoteJid];
+
+  for (const [key, value] of Object.entries(DEFAULT_GROUP)) {
+    if (group[key] === undefined) group[key] = structuredClone(value);
+  }
+
+  if (!group.activity || typeof group.activity !== "object")
+    group.activity = {};
+  if (!group.users || typeof group.users !== "object") group.users = {};
+  if (!group.warns || typeof group.warns !== "object") group.warns = {};
+
+  return group;
 }
 
 export function getGroupUsers(db, remoteJid) {

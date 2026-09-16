@@ -1,4 +1,5 @@
 import { saveDB, getDB } from "../../models/db.js";
+import { ensureGroup } from "../../models/groupDb.js";
 import { fytBold } from "../../models/TextStyle.js";
 
 function getWarnDate() {
@@ -8,11 +9,13 @@ function getWarnDate() {
 }
 
 async function registerStatusWarning(sock, remoteJid, userJid, db) {
-  const groupData = db.groups[remoteJid];
+  const groupData = ensureGroup(db, remoteJid);
 
   // Aseguramos que existan las estructuras necesarias en la BD del grupo
-  if (!groupData.warns) groupData.warns = {};
-  if (!groupData.warnLimit) groupData.warnLimit = 3; // Límite por defecto si no está definido
+  if (!groupData.warns || typeof groupData.warns !== "object") {
+    groupData.warns = {};
+  }
+  if (!Number.isFinite(groupData.warnLimit)) groupData.warnLimit = 3;
 
   // Compatibilidad con la estructura anterior, que guardaba las advertencias
   // directamente como un arreglo por usuario.
@@ -107,10 +110,12 @@ export async function handleAntiStatus(sock, message, getDBFn = getDB) {
   if (!groupStatusMention && !groupStatusV2) return;
 
   const db = await getDBFn();
-  if (!db?.groups || !db.groups[remoteJid]) return;
+  if (!db?.groups) return;
+
+  const group = ensureGroup(db, remoteJid);
 
   // Verificar si la función está encendida en la Base de Datos para este grupo
-  if (!db.groups[remoteJid].antiStatus) return;
+  if (!group?.antiStatus) return;
 
   // Dependiendo de la versión de Baileys, el autor puede venir en statusKey
   // o directamente en el participante del mensaje de notificación.
@@ -160,19 +165,12 @@ export default {
       return await socket.sendMessage(remoteJid, { text }, { quoted: message });
     }
 
-    if (!db.groups[remoteJid]) {
-      db.groups[remoteJid] = {
-        antilink: false,
-        warnLimit: 3,
-        warns: {},
-        activity: {},
-        onlyAdmin: false,
-        antitoxic: false,
-        antiCalls: false,
-        antiStatus: false,
-        botOn: true,
-      };
-    }
+    const group = ensureGroup(db, remoteJid);
+    group.antiStatus ??= false;
+    group.antiCalls ??= false;
+    group.warnLimit ??= 3;
+    group.warns ??= {};
+    group.activity ??= {};
 
     const status = args[0]?.toLowerCase();
 
