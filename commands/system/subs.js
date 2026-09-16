@@ -4,6 +4,7 @@ import {
   resolveSubBotSenderId,
   SUB_LIMIT_MESSAGE,
 } from "../../models/subbotManager.js";
+import { jidNormalizedUser } from "@whiskeysockets/baileys";
 
 export default {
   name: ["code", "qr"],
@@ -13,34 +14,52 @@ export default {
     socket,
     message,
     args,
-    { db, saveDB, numeroReal, jidRemitente },
+    { db, saveDB, numeroReal, jidRemitente, senderRaw },
   ) => {
     const remoteJid = message.key.remoteJid;
     const sender = jidRemitente;
 
-    const command =
-      message.message?.conversation?.split(" ")[0].slice(1) ||
-      message.message?.extendedTextMessage?.text?.split(" ")[0].slice(1) ||
+    const text =
+      message.message?.conversation ||
+      message.message?.extendedTextMessage?.text ||
       "";
+    const command = text.trim().split(/\s+/)[0]?.slice(1) || "";
 
     const isCode = command === "code";
 
     // 1. Extraer el argumento de forma segura
-    const rawArg = Array.isArray(args) && args[0] ? String(args[0]) : "";
-    const inputNum = rawArg.replace(/\D/g, "");
+    const rawArg = Array.isArray(args) ? args.join("") : "";
+    const manualNumber = normalizePhoneNumber(rawArg);
+    const senderJid = jidNormalizedUser(senderRaw || jidRemitente || "");
+    const senderIsLid =
+      senderJid.endsWith("@lid") || senderJid.includes("@hosted.lid");
+    const resolvedSenderJid = jidNormalizedUser(jidRemitente || "");
+    const unresolvedLid =
+      resolvedSenderJid.endsWith("@lid") ||
+      resolvedSenderJid.includes("@hosted.lid");
+    const detectedNumber = unresolvedLid
+      ? ""
+      : normalizePhoneNumber(jidRemitente || numeroReal || senderJid);
+    const inputNum =
+      manualNumber || detectedNumber || normalizePhoneNumber(numeroReal);
 
     // 2. Validar que se incluya el número en .code
-    if (isCode && (!inputNum || inputNum.length < 7)) {
+    if (
+      (isCode && (!inputNum || inputNum.length < 8)) ||
+      (senderIsLid &&
+        unresolvedLid &&
+        (!manualNumber || manualNumber.length < 8))
+    ) {
       return await socket.sendMessage(
         remoteJid,
         {
-          text: "⚠️ Ingresa el número de teléfono con su código de país.\n\nEjemplo: `.code 50612345678`",
+          text: `⚠️ No pude detectar tu número automáticamente. Ingresa tu número con código de país.\n\nEjemplo: ".${isCode ? "code" : "qr"} 50612345678"`,
         },
         { quoted: message },
       );
     }
 
-    const targetNumber = inputNum || numeroReal;
+    const targetNumber = normalizePhoneNumber(inputNum || numeroReal);
     const senderId = resolveSubBotSenderId(targetNumber, jidRemitente);
 
     // 3. Límite de sub-bots
@@ -99,6 +118,13 @@ export default {
     }
   },
 };
+
+function normalizePhoneNumber(value = "") {
+  return String(value)
+    .replace(/[()\s-]/g, "")
+    .replace(/[+]/g, "")
+    .replace(/[^\d]/g, "");
+}
 
 function msToTime(duration) {
   let seconds = Math.floor((duration / 1000) % 60);

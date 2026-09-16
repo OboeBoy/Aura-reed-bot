@@ -289,13 +289,39 @@ export async function handleMessage(sock, m, db, saveDB) {
   const cleanJid = (jid) =>
     jid ? String(jid).split("@")[0].split(":")[0] : null;
   const jidResuelto = await resolveLidToRealJid(senderRaw, sock, remoteJid);
-  const numeroReal = jidResuelto.split("@")[0].split(":")[0];
-  const jidRemitente = `${numeroReal}@s.whatsapp.net`;
+  const resolvedIsLid =
+    jidResuelto?.endsWith("@lid") || jidResuelto?.includes("@hosted.lid");
+  const numeroReal = resolvedIsLid
+    ? ""
+    : jidResuelto.split("@")[0].split(":")[0];
+  const jidRemitente = resolvedIsLid
+    ? jidResuelto
+    : `${numeroReal}@s.whatsapp.net`;
   const globalDb = getDBSync();
   const owners = globalDb.owners || [];
   const botId = sock.user?.id || sock.user?.jid;
   const sender = m.key.fromMe ? botId : jidRemitente;
-  const isOwner = owners.some((owner) => cleanJid(owner) === cleanJid(sender));
+
+  const ownerIdentities = new Set();
+  for (const owner of owners) {
+    const ownerClean = cleanJid(owner);
+    if (ownerClean) ownerIdentities.add(ownerClean);
+
+    if (String(owner).endsWith("@lid")) {
+      try {
+        const resolvedOwner = await resolveLidToRealJid(owner, sock, remoteJid);
+        const resolvedOwnerClean = cleanJid(resolvedOwner);
+        if (resolvedOwnerClean) ownerIdentities.add(resolvedOwnerClean);
+      } catch {}
+    }
+  }
+
+  const senderIdentities = new Set(
+    [sender, senderRaw, jidRemitente].map(cleanJid).filter(Boolean),
+  );
+  const isOwner =
+    Boolean(m.key.fromMe) ||
+    [...senderIdentities].some((identity) => ownerIdentities.has(identity));
 
   const groupSelfMode = isGroup && db.groups?.[remoteJid]?.selfMode;
   const modSelfMode = db.modSelfMode;
@@ -616,12 +642,11 @@ export async function handleMessage(sock, m, db, saveDB) {
           await sock.sendMessage(
             remoteJid,
             {
-              text: "⚠️ Ocurrió un error al ejecutar el comando. Revisa la consola del bot.",
+              text: `╭〔 ❌ 𝐀𝐔𝐑𝐀 𝐑𝐄𝐄𝐃 〕⬣\n┃ ⚠️ 𝐄𝐑𝐑𝐎𝐑 𝐄𝐍 𝐂𝐎𝐌𝐀𝐍𝐃𝐎\n╰━━━━━━━━━━━━⬣\n\n┃ > Ocurrió un error al ejecutar el comando *${prefix}${commandName}*.\n┃ > Detalle del error:\n> ${err}`,
             },
             { quoted: m },
           );
         } finally {
-          // 🔴 DETENER ESTADO DE "ESCRIBIENDO" (Al finalizar el comando con éxito o error)
           await sock.sendPresenceUpdate("paused", remoteJid);
         }
         return;

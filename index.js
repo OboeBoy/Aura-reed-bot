@@ -18,6 +18,8 @@ import fs from "fs";
 import "./models/settings.js";
 import { handleMessage } from "./controllers/msgHandler.js";
 import { handleGroupUpdate } from "./controllers/groupEvents.js";
+import { handleAntiCalls } from "./commands/group/antiCalls.js";
+import { handleAntiStatus } from "./commands/group/antiStatus.js";
 import { getDB, saveDB, initDB, flushDB } from "./models/db.js";
 import { restoreGamesFromDB } from "./commands/games/ahorcado.js";
 import {
@@ -337,18 +339,29 @@ async function connectToWhatsApp() {
   // MENSAJES
 
   sock.ev.on("messages.upsert", async ({ messages, type }) => {
-    // Solo procesamos mensajes nuevos.
-    if (type !== "notify") {
-      return;
+    if (!Array.isArray(messages) || messages.length === 0) return;
+
+    for (const m of messages) {
+      if (!m) continue;
+
+      try {
+        await handleAntiStatus(sock, m, getDB);
+      } catch (error) {
+        console.error(chalk.red("[ANTI-STATUS] Error en listener:"), error);
+      }
+
+      if (type === "notify") {
+        await handleMessage(sock, m, db, saveDB);
+      }
     }
+  });
 
-    const m = messages[0];
-
-    if (!m) {
-      return;
+  sock.ev.on("call", async ([call]) => {
+    try {
+      await handleAntiCalls(sock, call, getDB);
+    } catch (error) {
+      console.error(chalk.red("[ANTI-CALLS] Error en listener:"), error);
     }
-
-    await handleMessage(sock, m, db, saveDB);
   });
 
   // PARTICIPANTES DE GRUPOS
