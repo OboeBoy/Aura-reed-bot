@@ -4,13 +4,15 @@ import { fileURLToPath } from "url";
 import { fytBold } from "../../models/TextStyle.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-// Apuntamos a la misma carpeta tmp que usa tu comando de TikTok
-const customTemp = path.join(__dirname, "../../tmp");
+const targetDirs = [
+  path.join(__dirname, "../../tmp"),
+  path.join(__dirname, "../../temp")
+];
 
 export default {
   name: ["cleartmp", "limpiartmp", "deltmp", "cleartemp"],
   category: "system",
-  description: "Limpia la carpeta temporal del bot para liberar memoria interna.",
+  description: "Limpia las carpetas temporales del bot para liberar memoria interna.",
 
   execute: async (sock, m, args, isOwner) => {
     try {
@@ -22,31 +24,33 @@ export default {
 
       await sock.sendMessage(chatId, { react: { text: "🧹", key: m.key } });
 
-      if (!fs.existsSync(customTemp)) {
-         return await sock.sendMessage(chatId, { text: `╭〔 🧹 ${fytBold("AURA SYSTEM")} 〕⬣\n┃ ✅ ${fytBold("CARPETA VACÍA")}\n╰━━━━━━━━━━━━⬣\n\n┃ > La carpeta temporal ya está limpia o no existe.\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣` }, { quoted: m });
-      }
-
       let deletedFiles = 0;
       let freedSpace = 0;
 
-      // Leemos todos los archivos huérfanos que estén atorados en la carpeta tmp
-      const files = fs.readdirSync(customTemp);
-
-      for (const file of files) {
-        const filePath = path.join(customTemp, file);
-        try {
-          const stat = fs.statSync(filePath);
-          freedSpace += stat.size; // Sumamos el peso del archivo
-          
-          if (stat.isDirectory()) {
-            fs.rmSync(filePath, { recursive: true, force: true });
-          } else {
-            fs.unlinkSync(filePath);
+      for (const dir of targetDirs) {
+        if (fs.existsSync(dir)) {
+          const files = fs.readdirSync(dir);
+          for (const file of files) {
+            const filePath = path.join(dir, file);
+            try {
+              const stat = fs.statSync(filePath);
+              freedSpace += stat.size;
+              
+              if (stat.isDirectory()) {
+                fs.rmSync(filePath, { recursive: true, force: true });
+              } else {
+                fs.unlinkSync(filePath);
+              }
+              deletedFiles++;
+            } catch (err) {
+              console.log(`[cleartmp] Archivo bloqueado o en uso ignorado: ${filePath}`);
+            }
           }
-          deletedFiles++;
-        } catch (err) {
-          console.log(`[cleartmp] Archivo bloqueado o en uso ignorado: ${filePath}`);
         }
+      }
+
+      if (deletedFiles === 0) {
+         return await sock.sendMessage(chatId, { text: `╭〔 🧹 ${fytBold("AURA SYSTEM")} 〕⬣\n┃ ✅ ${fytBold("CARPETAS VACÍAS")}\n╰━━━━━━━━━━━━⬣\n\n┃ > Las carpetas temporales ya están limpias.\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣` }, { quoted: m });
       }
 
       const freedMB = (freedSpace / 1024 / 1024).toFixed(2);
@@ -70,4 +74,3 @@ export default {
     }
   }
 };
-
