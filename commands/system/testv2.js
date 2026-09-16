@@ -9,13 +9,12 @@ export default {
     try {
       const chatId = m.key.remoteJid;
 
-      
       let timestamp = m.messageTimestamp ? m.messageTimestamp * 1000 : Date.now();
       let ping = Date.now() - timestamp;
-      if (ping < 0 || ping > 5000) ping = Math.floor(Math.random() * 80) + 15; 
+      if (ping < 0 || ping > 5000) ping = Math.floor(Math.random() * 80) + 15;
 
       const ramUsage = (process.memoryUsage().rss / 1024 / 1024).toFixed(2);
-      const cacheUsage = (process.memoryUsage().external / 1024 / 1024).toFixed(2); 
+      const cacheUsage = (process.memoryUsage().external / 1024 / 1024).toFixed(2);
       
       const uptimeTotal = process.uptime();
       const h = Math.floor(uptimeTotal / 3600);
@@ -23,12 +22,10 @@ export default {
       const sec = Math.floor(uptimeTotal % 60);
       const uptimeStr = `${h}h ${min}m ${sec}s`;
 
-      const loadAvg = os.loadavg()[0].toFixed(2); 
+      const loadAvg = os.loadavg()[0].toFixed(2);
 
-      
-      const htmlCode = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"><title>Aura Test</title><style>body{margin:0;background:#0a0a0a;color:#0f0;font-family:monospace;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh}.container{width:85%;max-width:400px;background:#111;border:1px solid #333;border-radius:8px;padding:20px;box-shadow:0 0 15px rgba(0,255,0,0.2)}h1{font-size:20px;text-align:center;margin-top:0;border-bottom:1px solid #333;padding-bottom:10px;color:#fff;text-shadow:0 0 5px #0f0}.btn{display:block;width:100%;padding:15px;background:#0f0;color:#000;text-align:center;font-weight:700;font-size:16px;border:none;border-radius:4px;cursor:pointer;text-transform:uppercase;transition:transform 0.1s}.btn:active{transform:scale(0.95)}.console{margin-top:15px;height:140px;background:#000;border:1px solid #333;padding:10px;overflow-y:auto;font-size:13px;border-radius:4px;display:none}.results{margin-top:15px;display:none;animation:fadeIn 0.5s}.metric{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px dashed #333;font-size:14px}.metric span:last-child{font-weight:700;color:#fff}@keyframes fadeIn{from{opacity:0}to{opacity:1}}</style></head><body><div class="container"><h1>AURA DIAGNOSTICS</h1><button class="btn" id="runBtn">▶ Iniciar Test</button><div class="console" id="console"></div><div class="results" id="results"><div class="metric"><span>Latencia (Ping):</span><span id="r-ping"></span></div><div class="metric"><span>RAM en uso:</span><span id="r-ram"></span></div><div class="metric"><span>Caché interna:</span><span id="r-cache"></span></div><div class="metric"><span>Uptime:</span><span id="r-up"></span></div><div class="metric"><span>Carga SO (Proc):</span><span id="r-proc"></span></div></div></div><script>const stats={ping:'${ping} ms',ram:'${ramUsage} MB',cache:'${cacheUsage} MB',up:'${uptimeStr}',proc:'${loadAvg} %'};const btn=document.getElementById('runBtn');const cons=document.getElementById('console');const res=document.getElementById('results');const logs=["[+] Inicializando entorno...","[+] Pinging servidores de Meta...","[+] Analizando buffers y caché...","[+] Midiendo velocidad de RAM...","[+] Evaluando subprocesos...","[+] Compilando resultados..."];btn.onclick=()=>{btn.style.display='none';cons.style.display='block';let i=0;cons.innerHTML='';const iv=setInterval(()=>{if(i<logs.length){cons.innerHTML+='> '+logs[i]+'<br>';cons.scrollTop=cons.scrollHeight;i++;}else{clearInterval(iv);setTimeout(()=>{cons.style.display='none';res.style.display='block';document.getElementById('r-ping').innerText=stats.ping;document.getElementById('r-ram').innerText=stats.ram;document.getElementById('r-cache').innerText=stats.cache;document.getElementById('r-up').innerText=stats.up;document.getElementById('r-proc').innerText=stats.proc;},500);}},500);};</script></body></html>`;
+      const htmlCode = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"><title>Aura Test</title><style>body{margin:0;padding:20px 10px;background:#0a0a0a;color:#0f0;font-family:monospace;box-sizing:border-box}.container{width:90%;max-width:400px;margin:0 auto;background:#111;border:1px solid #333;border-radius:8px;padding:15px;box-shadow:0 0 15px rgba(0,255,0,0.2);box-sizing:border-box}h1{font-size:18px;text-align:center;margin-top:0;border-bottom:1px solid #333;padding-bottom:10px;color:#fff;text-shadow:0 0 5px #0f0}.btn{display:block;width:100%;padding:12px;background:#0f0;color:#000;text-align:center;font-weight:700;font-size:15px;border:none;border-radius:4px;cursor:pointer;text-transform:uppercase;transition:transform 0.1s}.btn:active{transform:scale(0.95)}.console{margin-top:15px;height:120px;background:#000;border:1px solid #333;padding:10px;overflow-y:auto;font-size:12px;border-radius:4px;display:none}.results{margin-top:15px;display:none;animation:fadeIn 0.5s}.metric{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px dashed #333;font-size:13px}.metric span:last-child{font-weight:700;color:#fff}@keyframes fadeIn{from{opacity:0}to{opacity:1}}</style></head><body><div class="container"><h1>AURA DIAGNOSTICS</h1><button class="btn" id="runBtn">▶ Iniciar Test</button><div class="console" id="console"></div><div class="results" id="results"><div class="metric"><span>Latencia (Ping):</span><span id="r-ping"></span></div><div class="metric"><span>RAM en uso:</span><span id="r-ram"></span></div><div class="metric"><span>Caché interna:</span><span id="r-cache"></span></div><div class="metric"><span>Uptime:</span><span id="r-up"></span></div><div class="metric"><span>Carga SO (Proc):</span><span id="r-proc"></span></div></div></div><script>const stats={ping:'${ping} ms',ram:'${ramUsage} MB',cache:'${cacheUsage} MB',up:'${uptimeStr}',proc:'${loadAvg} %'};const btn=document.getElementById('runBtn');const cons=document.getElementById('console');const res=document.getElementById('results');const logs=["[+] Inicializando entorno...","[+] Pinging servidores de Meta...","[+] Analizando buffers y cache...","[+] Midiendo velocidad de RAM...","[+] Evaluando subprocesos...","[+] Compilando resultados..."];btn.onclick=()=>{btn.style.display='none';cons.style.display='block';let i=0;cons.innerHTML='';const iv=setInterval(()=>{if(i<logs.length){cons.innerHTML+='> '+logs[i]+'<br>';cons.scrollTop=cons.scrollHeight;i++;}else{clearInterval(iv);setTimeout(()=>{cons.style.display='none';res.style.display='block';document.getElementById('r-ping').innerText=stats.ping;document.getElementById('r-ram').innerText=stats.ram;document.getElementById('r-cache').innerText=stats.cache;document.getElementById('r-up').innerText=stats.up;document.getElementById('r-proc').innerText=stats.proc;},500);}},500);};</script></body></html>`;
 
-      
       const responseData = {
         "response_id": "system-test-v2",
         "sections": [
@@ -37,7 +34,7 @@ export default {
               "primitive": {
                 "__typename": "GenAIaeacdsnwHtmlPrimitive",
                 "payload": htmlCode,
-                "trusted_sources": ["yuta.dev"] 
+                "trusted_sources": ["yuta.dev"]
               },
               "__typename": "GenAISingleLayoutViewModel"
             }
@@ -47,7 +44,6 @@ export default {
 
       const base64Payload = Buffer.from(JSON.stringify(responseData)).toString("base64");
 
-      
       await sock.relayMessage(
         chatId,
         {
@@ -97,11 +93,10 @@ export default {
             }
           }
         },
-        { messageId: m.key.id } 
+        { messageId: m.key.id }
       );
 
     } catch (e) {
-      console.error('[testv2]', e);
       await sock.sendMessage(m.key.remoteJid, { text: `❌ Error renderizando UI: ${e.message}` });
     }
   }
