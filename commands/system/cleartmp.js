@@ -6,13 +6,15 @@ import { fytBold } from "../../models/TextStyle.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const targetDirs = [
   path.join(__dirname, "../../tmp"),
-  path.join(__dirname, "../../temp")
+  path.join(__dirname, "../../temp"),
+  path.join(__dirname, "../../.npm"),
+  path.join(__dirname, "../../.cache")
 ];
 
 export default {
   name: ["cleartmp", "limpiartmp", "deltmp", "cleartemp"],
   category: "system",
-  description: "Limpia las carpetas temporales del bot para liberar memoria interna.",
+  description: "Limpia las carpetas temporales y de caché del bot para liberar memoria.",
 
   execute: async (sock, m, args, isOwner) => {
     try {
@@ -43,7 +45,7 @@ export default {
               }
               deletedFiles++;
             } catch (err) {
-              console.log(`[cleartmp] Archivo bloqueado o en uso ignorado: ${filePath}`);
+              console.log(`[cleartmp] Ignorado: ${filePath}`);
             }
           }
         }
