@@ -80,8 +80,11 @@ async function DL_TIKTOK(input) {
 
     if (data.status && Array.isArray(data.data) && data.data.length > 0) {
       const r = data;
+      const videoUrl = r.data[2]?.url || r.data[1]?.url || r.data[0]?.url;
+      if (!videoUrl) throw new Error("No se encontró URL de descarga en la API.");
+
       return {
-        video_dl: r.data[2].url,
+        video_dl: videoUrl,
         title: r.title || "Video de TikTok",
         authorNick: r.author?.nickname || r.author?.fullname || "Desconocido",
         likes: formatter(r.stats?.likes || r.digg_count || 0),
@@ -90,43 +93,52 @@ async function DL_TIKTOK(input) {
         collect: formatter(r.stats?.download || r.collect_count || 0),
         comments: formatter(r.stats?.comment || r.comment_count || 0),
         time: dateCreate(r.taken_at || r.create_time || 0),
-        tk_url: `https://www.tiktok.com/@${r.author?.fullname}/video/${r.id}`,
+        tk_url: `https://www.tiktok.com/@${r.author?.fullname || "user"}/video/${r.id || ""}`,
       };
     }
-    throw new Error("No se pudieron extraer los datos del video con TikWM.");
+    throw new Error("La API externa no devolvió datos válidos.");
   } catch (error) {
     throw new Error(`TikTok DL error: ${error.message}`);
   }
 }
 
-const MAX_INPUT_MB = 80; // Límite seguro para evitar ENOSPC en hosting
+const MAX_INPUT_MB = 80;
 
-async function descargarAArchivoConLimite(url, destPath, maxMb) {
-  // Primero hacemos una petición HEAD para revisar el tamaño antes de bajar todo
-  const headResponse = await apiAxios.head(url, {
-    headers: { "User-Agent": "Mozilla/5.0" },
-    timeout: 10000
-  });
-
-  const contentLength = headResponse.headers["content-length"];
-  if (contentLength) {
-    const sizeInMb = parseInt(contentLength) / (1024 * 1024);
-    if (sizeInMb > maxMb) {
-      throw new Error(`EXCEEDED_SIZE:${sizeInMb.toFixed(2)}`);
-    }
-  }
-
+async function descargarAArchivoSeguro(url, destPath, maxMb) {
   const response = await apiAxios({
     url,
     method: "GET",
     responseType: "stream",
     headers: {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+      "Accept-Language": "es-ES,es;q=0.9",
+      "Referer": "https://www.tikwm.com/",
       "Connection": "keep-alive"
-    }
+    },
+    timeout: 30000
   });
 
-  await pipelineAsync(response.data, fs.createWriteStream(destPath));
+  const writer = fs.createWriteStream(destPath);
+  let downloadedBytes = 0;
+  const maxBytes = maxMb * 1024 * 1024;
+
+  return new Promise((resolve, reject) => {
+    response.data.on("data", (chunk) => {
+      downloadedBytes += chunk.length;
+      if (downloadedBytes > maxBytes) {
+        response.data.destroy();
+        writer.close();
+        try { fs.unlinkSync(destPath); } catch {}
+        reject(new Error(`EXCEEDED_SIZE:${(downloadedBytes / (1024 * 1024)).toFixed(2)}`));
+      }
+    });
+
+    response.data.pipe(writer);
+    writer.on("finish", resolve);
+    writer.on("error", reject);
+    response.data.on("error", reject);
+  });
 }
 
 export default {
@@ -160,7 +172,7 @@ export default {
       const result = await DL_TIKTOK(text);
       
       try {
-        await descargarAArchivoConLimite(result.video_dl, inputP, MAX_INPUT_MB);
+        await descargarAArchivoSeguro(result.video_dl, inputP, MAX_INPUT_MB);
       } catch (err) {
         if (err.message && err.message.startsWith("EXCEEDED_SIZE")) {
           const actualMb = err.message.split(":")[1];
@@ -170,7 +182,7 @@ export default {
           return await socket.sendMessage(
             remoteJid,
             {
-              text: `😦 ¡Mae ponete serio! 💀🙏\nEste video pesa **${actualMb}MB** y supera el límite de ${MAX_INPUT_MB}MB permitido para no saturar el servidor.`,
+              text: `😦 ¡Mae ponete serio! 💀🙏\nEste video pesa **${actualMb}MB** y supera el límite de ${MAX_INPUT_MB}MB permitido.`,
             },
             { quoted: message },
           );
