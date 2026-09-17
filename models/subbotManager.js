@@ -4,8 +4,6 @@ import makeWASocket, {
   fetchLatestWaWebVersion,
   makeCacheableSignalKeyStore,
 } from "@whiskeysockets/baileys";
-import { handleAntiCalls } from "../commands/group/antiCalls.js";
-import { handleAntiStatus } from "../commands/group/antiStatus.js";
 
 import pino from "pino";
 import fs from "fs";
@@ -20,6 +18,10 @@ import { Boom } from "@hapi/boom";
 import { handleMessage } from "../controllers/msgHandler.js";
 
 import { handleGroupUpdate } from "../controllers/groupEvents.js";
+
+import { handleAntiCalls } from "../commands/group/antiCalls.js";
+
+import { handleAntiStatus } from "../commands/group/antiStatus.js";
 
 import { stripEconomyFromUsers } from "./groupDb.js";
 
@@ -720,39 +722,41 @@ export async function createSubBot(
 
     subSock.ev.on("messages.upsert", async ({ messages, type: msgType }) => {
       if (!Array.isArray(messages) || messages.length === 0) {
-        const db = await getSubBotDB(senderId);
+        return;
+      }
 
-        for (const msg of messages) {
-          if (!msg) continue;
+      for (const msg of messages) {
+        if (!msg) continue;
 
-          try {
-            await handleAntiStatus(subSock, msg, db, () => saveSubBotDB(senderId), getSubBotDB(senderId));
-          } catch (error) {
-            console.error("Error en la ejecución de handleAntiStatus:", error);
-          }
+        try {
+          await handleAntiStatus(subSock, msg, () => getSubBotDB(senderId));
+        } catch (error) {
+          console.error(
+            chalk.red(`[ANTI-STATUS] Error en sub-bot ${senderId}:`),
+            error,
+          );
+        }
+
+        if (msgType === "notify") {
+          const db = await getSubBotDB(senderId);
+
+          await handleMessage(subSock, msg, db, () => saveSubBotDB(senderId));
         }
       }
-
-      if (msgType !== "notify") {
-        await handleMessage(subSock, messages, await getSubBotDB(senderId), () => saveSubBotDB(senderId));
-        return;
-      }
-
-      const msg = messages[0];
-
-      if (!msg) {
-        return;
-      }
-      const db = await getSubBotDB(senderId);
-
-      await handleMessage(subSock, msg, db, () => saveSubBotDB(senderId));
     });
+
+    // ========================================================
+    // LLAMADAS
+    // ========================================================
 
     subSock.ev.on("call", async ([call]) => {
       try {
-        await handleAntiCalls(subSock, call, getSubBotDB);
+        await handleAntiCalls(subSock, call, () => getSubBotDB(senderId));
       } catch (error) {
-        console.error(chalk.red("[ANTI-CALLS] Error en listener:"), error);
+        console.error(
+          chalk.red(`[ANTI-CALLS] Error en sub-bot ${senderId}:`),
+          error,
+        );
       }
     });
 
