@@ -102,7 +102,7 @@ async function DL_TIKTOK(input) {
   }
 }
 
-const MAX_INPUT_MB = 80;
+const MAX_INPUT_MB = 150;
 
 async function descargarAArchivoSeguro(url, destPath, maxMb) {
   const response = await apiAxios({
