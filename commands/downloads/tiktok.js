@@ -13,7 +13,6 @@ import formatter from "../../controllers/functions/formatNumbers.js";
 import { fytBold } from "../../models/TextStyle.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
 const customTemp = path.join(__dirname, "../../tmp");
 
 process.env.TMPDIR = customTemp;
@@ -100,7 +99,23 @@ async function DL_TIKTOK(input) {
   }
 }
 
-async function descargarAArchivo(url, destPath) {
+const MAX_INPUT_MB = 80; // Límite seguro para evitar ENOSPC en hosting
+
+async function descargarAArchivoConLimite(url, destPath, maxMb) {
+  // Primero hacemos una petición HEAD para revisar el tamaño antes de bajar todo
+  const headResponse = await apiAxios.head(url, {
+    headers: { "User-Agent": "Mozilla/5.0" },
+    timeout: 10000
+  });
+
+  const contentLength = headResponse.headers["content-length"];
+  if (contentLength) {
+    const sizeInMb = parseInt(contentLength) / (1024 * 1024);
+    if (sizeInMb > maxMb) {
+      throw new Error(`EXCEEDED_SIZE:${sizeInMb.toFixed(2)}`);
+    }
+  }
+
   const response = await apiAxios({
     url,
     method: "GET",
@@ -110,10 +125,9 @@ async function descargarAArchivo(url, destPath) {
       "Connection": "keep-alive"
     }
   });
+
   await pipelineAsync(response.data, fs.createWriteStream(destPath));
 }
-
-const MAX_INPUT_MB = 100;
 
 export default {
   name: ["tk", "tt", "ttv", "tiktok", "tkmp4"],
@@ -144,25 +158,27 @@ export default {
 
     try {
       const result = await DL_TIKTOK(text);
-      await descargarAArchivo(result.video_dl, inputP);
-
-      const sizeMB = fs.statSync(inputP).size / (1024 * 1024);
-      const initialSizeB = fs.statSync(inputP).size;
-
-      if (sizeMB > MAX_INPUT_MB) {
-        await socket.sendMessage(remoteJid, {
-          react: { text: "💀", key: message.key },
-        });
-        try { fs.unlinkSync(inputP); } catch {}
-        return await socket.sendMessage(
-          remoteJid,
-          {
-            text: `😦 !Mae Ponete serio! 💀🙏\n Este video pesa mas de ${MAX_INPUT_MB}MB pesa mas que una chamaca de kilos mortales`,
-          },
-          { quoted: message },
-        );
+      
+      try {
+        await descargarAArchivoConLimite(result.video_dl, inputP, MAX_INPUT_MB);
+      } catch (err) {
+        if (err.message && err.message.startsWith("EXCEEDED_SIZE")) {
+          const actualMb = err.message.split(":")[1];
+          await socket.sendMessage(remoteJid, {
+            react: { text: "💀", key: message.key },
+          });
+          return await socket.sendMessage(
+            remoteJid,
+            {
+              text: `😦 ¡Mae ponete serio! 💀🙏\nEste video pesa **${actualMb}MB** y supera el límite de ${MAX_INPUT_MB}MB permitido para no saturar el servidor.`,
+            },
+            { quoted: message },
+          );
+        }
+        throw err;
       }
 
+      const initialSizeB = fs.statSync(inputP).size;
       let finalPath = inputP;
 
       try {
