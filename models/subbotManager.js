@@ -4,29 +4,19 @@ import makeWASocket, {
   fetchLatestWaWebVersion,
   makeCacheableSignalKeyStore,
 } from "@whiskeysockets/baileys";
-
 import pino from "pino";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-
 import chalk from "chalk";
 import QRCode from "qrcode";
-
 import { Boom } from "@hapi/boom";
-
 import { handleMessage } from "../controllers/msgHandler.js";
-
 import { handleGroupUpdate } from "../controllers/groupEvents.js";
-
 import { handleAntiCalls } from "../commands/group/antiCalls.js";
-
 import { handleAntiStatus } from "../commands/group/antiStatus.js";
-
 import { stripEconomyFromUsers } from "./groupDb.js";
-
 import { getDBSync } from "./db.js";
-
 import {
   getSubBotDB,
   saveSubBotDB,
@@ -71,11 +61,8 @@ export function getMaxSubBots() {
 // ============================================================
 
 const ROOT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
-
 const sessionsDir = path.join(ROOT_DIR, "sessions", "subbots");
-
 const databaseDir = path.join(ROOT_DIR, "database");
-
 const subbotsJsonPath = path.join(databaseDir, "subbots.json");
 
 if (!fs.existsSync(sessionsDir)) {
@@ -91,7 +78,6 @@ if (!fs.existsSync(sessionsDir)) {
 const activeSubBots = new Map();
 const subBotReconnectTimers = new Map();
 const subBotReconnectAttempts = new Map();
-
 const MAX_SUBBOT_RECONNECT_ATTEMPTS = 2;
 
 function clearSubBotReconnectTimer(senderId) {
@@ -201,15 +187,10 @@ export function resolveSubBotSenderId(phoneNumber, jidRemitente) {
 
 export function getSubBotSlotStatus(senderId) {
   const max = getMaxSubBots();
-
   const id = resolveSubBotSenderId(null, senderId);
-
   const active = listActiveSubBotSessions();
-
   const count = active.length;
-
   const hasOwn = id ? active.includes(id) : false;
-
   const available = Math.max(0, max - count);
 
   return {
@@ -346,7 +327,6 @@ export function getRegisteredSubBots() {
     if (!fs.existsSync(subbotsJsonPath)) return [];
 
     const data = JSON.parse(fs.readFileSync(subbotsJsonPath, "utf-8"));
-
     const subbotsObj = data?.subbots || {};
     const results = [];
 
@@ -582,9 +562,7 @@ export async function createSubBot(
   }
 
   let isConnected = false;
-
   let codeRequested = false;
-
   let timeout;
 
   // ==========================================================
@@ -684,30 +662,19 @@ export async function createSubBot(
       logger: pino({
         level: "silent",
       }),
-
       printQRInTerminal: false,
-
       browser: ["Ubuntu", "Chrome", "20.0.04"],
-
       connectTimeoutMs: 60000,
-
       defaultQueryTimeoutMs: 0,
-
       keepAliveIntervalMs: 15000,
-
       syncFullHistory: false,
-
       markOnlineOnConnect: true,
     });
 
     subSock.isSubBot = true;
-
     subSock.subBotId = senderId;
-
     subSock.isClosedManually = false;
-
     wrapGroupMetadataCache(subSock);
-
     activeSubBots.set(senderId, subSock);
 
     // ========================================================
@@ -874,7 +841,6 @@ export async function createSubBot(
 
       if (timeout) {
         clearTimeout(timeout);
-
         timeout = null;
       }
 
@@ -886,7 +852,6 @@ export async function createSubBot(
         console.log(
           `[SUB-BOT] Desvinculación detectada. Limpiando datos de sesión.`,
         );
-
         await destroySubBotSocket(senderId, subSock);
 
         if (fs.existsSync(sessionPath)) {

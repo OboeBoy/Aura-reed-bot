@@ -40,44 +40,58 @@ async function DL_TIKTOK(input) {
   let targetUrl = validateTikTokUrl(input);
 
   if (!targetUrl) {
-    throw new Error("El enlace proporcionado no es un enlace válido de TikTok.");
-  }
+    const APIKEY = global.Apis?.apiAiya?.apikey || "oboe";
+    const alyaUrl = `https://api.alyacore.xyz/search/tiktok?query=${encodeURIComponent(input)}&key=${APIKEY}`;
+    const { data: alyaData } = await apiAxios.get(alyaUrl, { timeout: 15000 });
 
-  try {
-    const { data } = await apiAxios.post(
-      "https://www.tikwm.com/api/",
-      { url: targetUrl, count: 12, cursor: 0, web: 1, hd: 1 },
-      {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-          "Accept": "application/json, text/javascript, */*; q=0.01"
-        },
-        timeout: 15000
-      }
-    );
-
-    if (data.code === 0 && data.data) {
-      const r = data.data;
-      return {
-        video_dl: r.wmplay || r.play,
-        cover: r.cover || r.origin_cover,
-        title: r.title || "Audio de TikTok",
-        authorNick: r.author?.nickname || r.author?.unique_id || "Desconocido",
-        likes: formatter(r.digg_count || 0),
-        views: formatter(r.play_count || 0),
-        shares: formatter(r.share_count || 0),
-        collect: formatter(r.collect_count || 0),
-        comments: formatter(r.comment_count || 0),
-        time: new Date(Number(r.create_time) * 1000).toLocaleDateString("es-ES"),
-        tk_url: `https://www.tiktok.com/@${r.author?.unique_id || "video"}/video/${r.id}`
-      };
+    if (
+      alyaData.status &&
+      Array.isArray(alyaData.data) &&
+      alyaData.data.length > 0
+    ) {
+      targetUrl = alyaData.data[0].url;
     }
-    
-    throw new Error("La API no devolvió el archivo multimedia.");
-  } catch (error) {
-    throw new Error(`Fallo en la extracción: ${error.message}`);
   }
+
+  if (!targetUrl) {
+    throw new Error("No se encontró ningún enlace válido para la búsqueda.");
+  }
+
+  const APIKEY = global.Apis?.apiAiya?.apikey || "oboe";
+  const URL_TIKTOK = `https://api.alyacore.xyz/dl/tiktokv2?url=${encodeURIComponent(targetUrl)}&key=${APIKEY}`;
+  
+  const dateCreate = (ts) =>
+    new Date(Number(ts) * 1000).toLocaleDateString("es-ES");
+
+  const { data } = await apiAxios.get(URL_TIKTOK, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+      Accept: "application/json, text/plain, */*",
+    },
+    timeout: 15000,
+  });
+
+  if (data.status && Array.isArray(data.data) && data.data.length > 0) {
+    const r = data;
+    const videoUrl = r.data[2]?.url || r.data[1]?.url || r.data[0]?.url;
+    if (!videoUrl) throw new Error("No se encontró URL de descarga en la API.");
+
+    return {
+      video_dl: videoUrl,
+      cover: r.cover || "",
+      title: r.title || "Audio de TikTok",
+      authorNick: r.author?.nickname || r.author?.fullname || "Desconocido",
+      likes: formatter(r.stats?.likes || r.digg_count || 0),
+      views: formatter(r.stats?.views || r.play_count || 0),
+      shares: formatter(r.stats?.share || r.share_count || 0),
+      collect: formatter(r.stats?.download || r.collect_count || 0),
+      comments: formatter(r.stats?.comment || r.comment_count || 0),
+      time: dateCreate(r.taken_at || r.create_time || 0),
+      tk_url: `https://www.tiktok.com/@${r.author?.fullname || "user"}/video/${r.id || ""}`,
+    };
+  }
+
+  throw new Error("La API externa no devolvió datos válidos.");
 }
 
 async function descargarAArchivo(url, destPath) {
@@ -86,9 +100,11 @@ async function descargarAArchivo(url, destPath) {
     method: "GET",
     responseType: "stream",
     headers: {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+      "Referer": "https://www.tikwm.com/",
       "Connection": "keep-alive"
-    }
+    },
+    timeout: 30000
   });
   await pipelineAsync(response.data, fs.createWriteStream(destPath));
 }
@@ -153,7 +169,7 @@ export default {
 
       await processAudioFile(inputP, outP);
 
-      let caption = `╭〔 🎥 ${fytBold("TIKTOK VIDEO")} 〕━⬣\n\n`;
+      let caption = `╭〔 🎵 ${fytBold("TIKTOK AUDIO")} 〕━⬣\n\n`;
       caption += `┃ ➥ ${fytBold(result.title)}\n\n`;
       caption += `┣━━━━━━━━━━━━⬣\n`;
       caption += `┃ > ${fytBold("Autor")} › ${result.authorNick}\n`;
@@ -167,16 +183,18 @@ export default {
       caption += `┃ > ${fytBold("Url")} › ${result.tk_url}\n`;
       caption += `╰〔 ⚡ ${fytBold("SYSTEM ACTIVE")} 〕⬣`;
 
-      await socket.sendMessage(
-        remoteJid,
-        {
-          image: { url: result.cover },
-          caption: caption,
-        },
-        { quoted: message },
-      );
+      if (result.cover) {
+        await socket.sendMessage(
+          remoteJid,
+          {
+            image: { url: result.cover },
+            caption: caption,
+          },
+          { quoted: message },
+        );
+      }
 
-      const safeFileName = `${result.authorNick} - ${result.title}.mp3`.replace(/[\r\n/\\?%*:|"<>]/g, "");
+      const safeFileName = `${result.authorNick} - ${result.title}`.replace(/[\r\n/\\?%*:|"<>]/g, "").slice(0, 100) + ".mp3";
 
       await socket.sendMessage(
         remoteJid,
