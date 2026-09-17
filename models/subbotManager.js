@@ -4,8 +4,8 @@ import makeWASocket, {
   fetchLatestWaWebVersion,
   makeCacheableSignalKeyStore,
 } from "@whiskeysockets/baileys";
-import { handleAntiCalls } from "./commands/group/antiCalls.js";
-import { handleAntiStatus } from "./commands/group/antiStatus.js";
+import { handleAntiCalls } from "../commands/group/antiCalls.js";
+import { handleAntiStatus } from "../commands/group/antiStatus.js";
 
 import pino from "pino";
 import fs from "fs";
