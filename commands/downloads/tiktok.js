@@ -247,11 +247,7 @@ export default {
       caption += `┃ > ${fytBold("Favoritos")} › ${result.collect}\n`;
       caption += `┃ > ${fytBold("Compartidos")} › ${result.shares}\n`;
       caption += `┣━━━━━━━━━━━━⬣\n`;
-      caption += `┃ > ${fytBold("Peso Original")} › ${formatSize(initialSizeB)}\n`;
-      caption += `┃ > ${fytBold("Peso Optimizado")} › ${formatSize(finalSizeB)}\n`;
-      caption += `┃ > ${fytBold("Almacenamiento")} › Libre ${diskFreeStr} / Total ${diskTotalStr}\n`;
-      caption += `┣━━━━━━━━━━━━⬣\n`;
-      caption += `┃ > ${fytBold("Url")} › ${result.tk_url}\n`;
+      caption += `┃ > ${result.tk_url}\n`;
       caption += `╰〔 ⚡ ${fytBold("SYSTEM ACTIVE")} 〕⬣`;
 
       await socket.sendMessage(
