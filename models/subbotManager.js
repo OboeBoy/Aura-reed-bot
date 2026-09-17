@@ -4,6 +4,8 @@ import makeWASocket, {
   fetchLatestWaWebVersion,
   makeCacheableSignalKeyStore,
 } from "@whiskeysockets/baileys";
+import { handleAntiCalls } from "./commands/group/antiCalls.js";
+import { handleAntiStatus } from "./commands/group/antiStatus.js";
 
 import pino from "pino";
 import fs from "fs";
@@ -717,7 +719,22 @@ export async function createSubBot(
     // ========================================================
 
     subSock.ev.on("messages.upsert", async ({ messages, type: msgType }) => {
+      if (!Array.isArray(messages) || messages.length === 0) {
+        const db = await getSubBotDB(senderId);
+
+        for (const msg of messages) {
+          if (!msg) continue;
+
+          try {
+            await handleAntiStatus(subSock, msg, db, () => saveSubBotDB(senderId), getSubBotDB(senderId));
+          } catch (error) {
+            console.error("Error en la ejecución de handleAntiStatus:", error);
+          }
+        }
+      }
+
       if (msgType !== "notify") {
+        await handleMessage(subSock, messages, await getSubBotDB(senderId), () => saveSubBotDB(senderId));
         return;
       }
 
@@ -726,10 +743,17 @@ export async function createSubBot(
       if (!msg) {
         return;
       }
-
       const db = await getSubBotDB(senderId);
 
       await handleMessage(subSock, msg, db, () => saveSubBotDB(senderId));
+    });
+
+    subSock.ev.on("call", async ([call]) => {
+      try {
+        await handleAntiCalls(subSock, call, getSubBotDB);
+      } catch (error) {
+        console.error(chalk.red("[ANTI-CALLS] Error en listener:"), error);
+      }
     });
 
     // ========================================================
