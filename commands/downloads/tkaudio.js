@@ -160,6 +160,8 @@ export default {
           await descargarAArchivo(result.cover, coverP);
           if (fs.existsSync(coverP) && fs.statSync(coverP).size > 0) {
             hasCover = true;
+          } else {
+            hasCover = null
           }
         } catch (e) {
           hasCover = false;
@@ -253,4 +255,4 @@ export default {
       try { if (fs.existsSync(coverP)) fs.unlinkSync(coverP); } catch {}
     }
   },
-};Sexo
+};
