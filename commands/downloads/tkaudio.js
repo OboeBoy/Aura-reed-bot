@@ -101,6 +101,7 @@ async function descargarAArchivo(url, destPath) {
     responseType: "stream",
     headers: {
       "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
       "Referer": "https://www.tikwm.com/",
       "Connection": "keep-alive"
     },
@@ -144,10 +145,26 @@ export default {
     const id = crypto.randomBytes(8).toString("hex");
     const inputP = path.join(tmp, `tta_in_${id}.mp4`);
     const outP = path.join(tmp, `tta_out_${id}.mp3`);
+    const coverP = path.join(tmp, `tta_cover_${id}.webp`);
+
+    let hasCover = false;
 
     try {
       const result = await DL_TIKTOK(text);
+      
+      // Descargamos el video y la portada de forma segura saltando Cloudflare
       await descargarAArchivo(result.video_dl, inputP);
+
+      if (result.cover) {
+        try {
+          await descargarAArchivo(result.cover, coverP);
+          if (fs.existsSync(coverP) && fs.statSync(coverP).size > 0) {
+            hasCover = true;
+          }
+        } catch (e) {
+          hasCover = false;
+        }
+      }
 
       const sizeMB = fs.statSync(inputP).size / (1024 * 1024);
 
@@ -155,9 +172,6 @@ export default {
         await socket.sendMessage(remoteJid, {
           react: { text: "❌", key: message.key },
         });
-        try {
-          fs.unlinkSync(inputP);
-        } catch {}
         return await socket.sendMessage(
           remoteJid,
           {
@@ -183,14 +197,20 @@ export default {
       caption += `┃ > ${fytBold("Url")} › ${result.tk_url}\n`;
       caption += `╰〔 ⚡ ${fytBold("SYSTEM ACTIVE")} 〕⬣`;
 
-      if (result.cover) {
+      if (hasCover) {
         await socket.sendMessage(
           remoteJid,
           {
-            image: { url: result.cover },
+            image: { url: coverP },
             caption: caption,
           },
           { quoted: message },
+        );
+      } else {
+        await socket.sendMessage(
+          remoteJid,
+          { text: caption },
+          { quoted: message }
         );
       }
 
@@ -228,12 +248,9 @@ export default {
         { quoted: message },
       );
     } finally {
-      try {
-        if (fs.existsSync(inputP)) fs.unlinkSync(inputP);
-      } catch {}
-      try {
-        if (fs.existsSync(outP)) fs.unlinkSync(outP);
-      } catch {}
+      try { if (fs.existsSync(inputP)) fs.unlinkSync(inputP); } catch {}
+      try { if (fs.existsSync(outP)) fs.unlinkSync(outP); } catch {}
+      try { if (fs.existsSync(coverP)) fs.unlinkSync(coverP); } catch {}
     }
   },
-};
+};Sexo
