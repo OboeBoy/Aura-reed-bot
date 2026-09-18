@@ -2,11 +2,22 @@ import fs from "fs/promises";
 import path from "path";
 import chalk from "chalk";
 
-const THIRTY_MINUTES_MS = 30 * 60 * 1000;
-const CLEAN_DIRS = ["tmp", "scratch"];
+const DEFAULT_TTL_MS = 30 * 60 * 1000;
+const CACHE_TTL_MS = Number(process.env.AURA_CACHE_TTL_MS || DEFAULT_TTL_MS);
+
+function getCleanDirs() {
+  const configuredCacheDir = process.env.AURA_DOWNLOAD_CACHE;
+  const dirs = ["cache", "scratch"];
+
+  if (configuredCacheDir) {
+    dirs.push(configuredCacheDir);
+  }
+
+  return [...new Set(dirs.map((dir) => path.resolve(dir)))];
+}
 
 function isStale(mtimeMs) {
-  return Date.now() - mtimeMs >= THIRTY_MINUTES_MS;
+  return Date.now() - mtimeMs >= CACHE_TTL_MS;
 }
 
 async function removeOldEntries(folderPath) {
@@ -56,9 +67,12 @@ let cacheTimer = null;
 const MAX_TIMEOUT_MS = 2 ** 31 - 1;
 
 async function cleanCache() {
-  console.log(chalk.gray("[cleanCache] Iniciando limpieza de cache..."));
-  for (const dir of CLEAN_DIRS) {
-    const folderPath = path.resolve(dir);
+  console.log(
+    chalk.gray(
+      `[cleanCache] Iniciando limpieza de cache (TTL: ${CACHE_TTL_MS} ms)...`,
+    ),
+  );
+  for (const folderPath of getCleanDirs()) {
     await removeOldEntries(folderPath);
   }
   console.log(chalk.gray("[cleanCache] Limpieza de cache completada."));
@@ -72,7 +86,7 @@ export async function runCleanCacheIfNeeded(db, saveDB) {
   const now = Date.now();
   const lastRun = db.cleanCacheLastRun || 0;
 
-  if (now - lastRun < THIRTY_MINUTES_MS) {
+  if (now - lastRun < CACHE_TTL_MS) {
     return;
   }
 
@@ -97,7 +111,7 @@ export async function runCleanCacheIfNeeded(db, saveDB) {
 function scheduleNextRun(db, saveDB) {
   const now = Date.now();
   const lastRun = db.cleanCacheLastRun || 0;
-  let delay = Math.max(0, THIRTY_MINUTES_MS - (now - lastRun));
+  let delay = Math.max(0, CACHE_TTL_MS - (now - lastRun));
 
   if (delay > MAX_TIMEOUT_MS) {
     delay = MAX_TIMEOUT_MS;

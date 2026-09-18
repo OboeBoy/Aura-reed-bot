@@ -26,6 +26,7 @@ export const usersCache = new NodeCache({ stdTTL: 600, useClones: false });
 const DEFAULT_DB_CONFIG = {
   selfMode: false,
   modSelfMode: false,
+  restrictedCommands: [],
   owners: [
     "50672373785@s.whatsapp.net",
     "573135180876@s.whatsapp.net",
@@ -343,6 +344,7 @@ function ensureDefaults() {
   const defaults = [
     ["selfMode", DEFAULT_DB_CONFIG.selfMode],
     ["modSelfMode", DEFAULT_DB_CONFIG.modSelfMode],
+    ["restrictedCommands", DEFAULT_DB_CONFIG.restrictedCommands],
     ["prefix", DEFAULT_DB_CONFIG.prefix],
     ["owners", DEFAULT_DB_CONFIG.owners],
     ["maxSubBots", DEFAULT_DB_CONFIG.maxSubBots],
@@ -405,6 +407,8 @@ export async function initDB() {
   dbCache = {
     selfMode: dbData.selfMode ?? DEFAULT_DB_CONFIG.selfMode,
     modSelfMode: dbData.modSelfMode ?? DEFAULT_DB_CONFIG.modSelfMode,
+    restrictedCommands:
+      dbData.restrictedCommands || DEFAULT_DB_CONFIG.restrictedCommands,
     prefix: dbData.prefix ?? DEFAULT_DB_CONFIG.prefix,
     owners: dbData.owners || DEFAULT_DB_CONFIG.owners,
     ownerRoles: dbData.ownerRoles || {},
@@ -452,6 +456,8 @@ function writeDbFiles(data) {
     const prefix = data.prefix ?? DEFAULT_DB_CONFIG.prefix;
     const selfMode = data.selfMode ?? DEFAULT_DB_CONFIG.selfMode;
     const modSelfMode = data.modSelfMode ?? DEFAULT_DB_CONFIG.modSelfMode;
+    const restrictedCommands =
+      data.restrictedCommands ?? DEFAULT_DB_CONFIG.restrictedCommands;
     const owners = data.owners ?? DEFAULT_DB_CONFIG.owners;
     const maxSubBots = data.maxSubBots ?? DEFAULT_DB_CONFIG.maxSubBots;
     const ownerRoles = data.ownerRoles ?? {};
@@ -464,6 +470,7 @@ function writeDbFiles(data) {
       const configUpdates = [
         ["selfMode", selfMode],
         ["modSelfMode", modSelfMode],
+        ["restrictedCommands", restrictedCommands],
         ["prefix", prefix],
         ["owners", owners],
         ["maxSubBots", maxSubBots],

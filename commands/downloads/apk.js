@@ -1,6 +1,7 @@
 import fetch from "node-fetch";
 import fs from "fs";
 import path from "path";
+import { getDownloadCacheDir } from "../../controllers/downloadUtils.js";
 import { fytBold } from "../../models/TextStyle.js";
 
 async function fetchJson(url) {
@@ -67,7 +68,8 @@ export default {
       react: { text: "⏳", key: message.key },
     });
 
-    const cacheDir = path.resolve("./tmp");
+    const cacheDir = getDownloadCacheDir();
+
     let cachePath = null;
     let isCacheHit = false;
 

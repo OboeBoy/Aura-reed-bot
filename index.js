@@ -103,7 +103,6 @@ const banner = `
 `;
 
 console.log(banner);
-
 // PREGUNTA DE TERMINAL
 const question = (text) =>
   new Promise((resolve) => {
@@ -274,7 +273,6 @@ async function connectToWhatsApp() {
   });
 
   // SOCKET PRINCIPAL GLOBAL
-
   global.mainSocket = sock;
 
   setMainSocket(sock);
@@ -440,6 +438,14 @@ async function connectToWhatsApp() {
     // SESIÓN INVÁLIDA
     // ========================================================
 
+    const transientDisconnectCodes = [
+      DisconnectReason.connectionLost,
+      DisconnectReason.connectionClosed,
+      DisconnectReason.timedOut,
+      DisconnectReason.restartRequired,
+      DisconnectReason.connectionReplaced,
+    ];
+
     const shouldResetSession =
       [
         DisconnectReason.loggedOut,
@@ -447,6 +453,22 @@ async function connectToWhatsApp() {
         DisconnectReason.forbidden,
         DisconnectReason.multideviceMismatch,
       ].includes(statusCode) || isNotRegistered;
+
+    const isTransientDisconnect =
+      transientDisconnectCodes.includes(statusCode) && !isNotRegistered;
+
+    if (isTransientDisconnect) {
+      console.log(
+        chalk.yellow(
+          "⚠️ Desconexión temporal detectada. Reintentando sin borrar la sesión actual...",
+        ),
+      );
+
+      const retryCount = registerMainReconnectAttempt();
+      const delayMs = Math.min(5000 * retryCount, 20000);
+      scheduleMainReconnect(delayMs);
+      return;
+    }
 
     if (shouldResetSession) {
       if (isNotRegistered) {

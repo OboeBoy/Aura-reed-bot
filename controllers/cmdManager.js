@@ -46,7 +46,10 @@ export default {
         activity: {},
         onlyAdmin: false,
         antitoxic: false,
+        antiCalls: false,
+        antiStatus: false,
         disabledCategories: ["nsfw"],
+        restrictedCommands: [],
         botOn: true,
       };
     }

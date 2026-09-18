@@ -10,18 +10,13 @@ import http from "http";
 import https from "https";
 import stream from "stream";
 import formatter from "../../controllers/functions/formatNumbers.js";
+import { setDownloadCacheEnv } from "../../controllers/downloadUtils.js";
 import { fytBold } from "../../models/TextStyle.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const customTemp = path.join(__dirname, "../../tmp");
-
-process.env.TMPDIR = customTemp;
-process.env.TEMP = customTemp;
-process.env.TMP = customTemp;
+const tmp = setDownloadCacheEnv();
 
 const execAsync = promisify(exec);
 const pipelineAsync = promisify(stream.pipeline);
-const tmp = customTemp;
 
 if (!fs.existsSync(tmp)) fs.mkdirSync(tmp, { recursive: true });
 
@@ -50,7 +45,9 @@ async function DL_TIKTOK(input) {
     if (!targetUrl) {
       const APIKEY = global.Apis.apiAiya.apikey;
       const alyaUrl = `https://api.alyacore.xyz/search/tiktok?query=${encodeURIComponent(input)}&key=${APIKEY}`;
-      const { data: alyaData } = await apiAxios.get(alyaUrl, { timeout: 15000 });
+      const { data: alyaData } = await apiAxios.get(alyaUrl, {
+        timeout: 15000,
+      });
 
       if (
         alyaData.status &&
@@ -81,7 +78,8 @@ async function DL_TIKTOK(input) {
     if (data.status && Array.isArray(data.data) && data.data.length > 0) {
       const r = data;
       const videoUrl = r.data[2]?.url || r.data[1]?.url || r.data[0]?.url;
-      if (!videoUrl) throw new Error("No se encontró URL de descarga en la API.");
+      if (!videoUrl)
+        throw new Error("No se encontró URL de descarga en la API.");
 
       return {
         video_dl: videoUrl,
@@ -110,13 +108,15 @@ async function descargarAArchivoSeguro(url, destPath, maxMb) {
     method: "GET",
     responseType: "stream",
     headers: {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+      Accept:
+        "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
       "Accept-Language": "es-ES,es;q=0.9",
-      "Referer": "https://www.tikwm.com/",
-      "Connection": "keep-alive"
+      Referer: "https://www.tikwm.com/",
+      Connection: "keep-alive",
     },
-    timeout: 30000
+    timeout: 30000,
   });
 
   const writer = fs.createWriteStream(destPath);
@@ -129,8 +129,14 @@ async function descargarAArchivoSeguro(url, destPath, maxMb) {
       if (downloadedBytes > maxBytes) {
         response.data.destroy();
         writer.close();
-        try { fs.unlinkSync(destPath); } catch {}
-        reject(new Error(`EXCEEDED_SIZE:${(downloadedBytes / (1024 * 1024)).toFixed(2)}`));
+        try {
+          fs.unlinkSync(destPath);
+        } catch {}
+        reject(
+          new Error(
+            `EXCEEDED_SIZE:${(downloadedBytes / (1024 * 1024)).toFixed(2)}`,
+          ),
+        );
       }
     });
 
@@ -170,7 +176,7 @@ export default {
 
     try {
       const result = await DL_TIKTOK(text);
-      
+
       try {
         await descargarAArchivoSeguro(result.video_dl, inputP, MAX_INPUT_MB);
       } catch (err) {
@@ -280,8 +286,12 @@ export default {
         { quoted: message },
       );
     } finally {
-      try { if (fs.existsSync(inputP)) fs.unlinkSync(inputP); } catch {}
-      try { if (fs.existsSync(whatsappReadyPath)) fs.unlinkSync(whatsappReadyPath); } catch {}
+      try {
+        if (fs.existsSync(inputP)) fs.unlinkSync(inputP);
+      } catch {}
+      try {
+        if (fs.existsSync(whatsappReadyPath)) fs.unlinkSync(whatsappReadyPath);
+      } catch {}
     }
   },
 };

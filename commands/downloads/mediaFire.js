@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import axios from "axios";
 import * as cheerio from "cheerio";
+import { getDownloadCacheDir } from "../../controllers/downloadUtils.js";
 import { fytBold } from "../../models/TextStyle.js";
 
 const HEADERS = {
@@ -133,7 +134,8 @@ export default {
       react: { text: "⏳", key: message.key },
     });
 
-    const cacheDir = path.resolve("./tmp");
+    const cacheDir = getDownloadCacheDir();
+
     let cachePath = null;
     let isCacheHit = false;
 

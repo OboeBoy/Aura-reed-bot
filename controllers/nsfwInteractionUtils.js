@@ -14,7 +14,7 @@ import chalk from "chalk";
 
 const execAsync = promisify(exec);
 
-const tempDir = path.resolve("./tmp");
+const tempDir = path.resolve("./cache");
 ensureDirectory(tempDir);
 
 export const ALLOWED_NSFW_REACTIONS = new Set([

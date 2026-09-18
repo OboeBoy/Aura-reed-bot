@@ -1,6 +1,32 @@
 import axios from "axios";
 import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 import { pipeline } from "stream/promises";
+
+const projectRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+);
+const defaultDownloadCacheDir = path.join(projectRoot, "cache");
+
+export function getDownloadCacheDir() {
+  const cacheDir = process.env.AURA_DOWNLOAD_CACHE || defaultDownloadCacheDir;
+  fs.mkdirSync(cacheDir, { recursive: true });
+  return cacheDir;
+}
+
+export function getDownloadCachePath(fileName) {
+  return path.join(getDownloadCacheDir(), fileName);
+}
+
+export function setDownloadCacheEnv() {
+  const cacheDir = getDownloadCacheDir();
+  process.env.TMPDIR = cacheDir;
+  process.env.TEMP = cacheDir;
+  process.env.TMP = cacheDir;
+  return cacheDir;
+}
 
 export function ensureDirectory(dirPath) {
   if (!fs.existsSync(dirPath)) {

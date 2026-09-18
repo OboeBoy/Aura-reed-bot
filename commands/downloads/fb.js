@@ -2,17 +2,15 @@ import axios from "axios";
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
+import { fileURLToPath } from "url";
 import {
   fetchJson,
   downloadStreamToFile,
+  getDownloadCacheDir,
 } from "../../controllers/downloadUtils.js";
 import { fytBold } from "../../models/TextStyle.js";
 
-const customTemp = path.join(
-  path.dirname(new URL(import.meta.url).pathname),
-  "../../tmp",
-);
-if (!fs.existsSync(customTemp)) fs.mkdirSync(customTemp, { recursive: true });
+const customTemp = getDownloadCacheDir();
 
 async function firstSuccessfulPromise(promises) {
   return new Promise((resolve, reject) => {

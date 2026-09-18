@@ -10,18 +10,13 @@ import http from "http";
 import https from "https";
 import stream from "stream";
 import formatter from "../../controllers/functions/formatNumbers.js";
+import { setDownloadCacheEnv } from "../../controllers/downloadUtils.js";
 import { fytBold } from "../../models/TextStyle.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const customTemp = fs.existsSync("/dev/shm") ? path.join("/dev/shm", "aura_tmp") : path.join(__dirname, "../../tmp");
-
-process.env.TMPDIR = customTemp;
-process.env.TEMP = customTemp;
-process.env.TMP = customTemp;
+const tmp = setDownloadCacheEnv();
 
 const execAsync = promisify(exec);
 const pipelineAsync = promisify(stream.pipeline);
-const tmp = customTemp;
 
 if (!fs.existsSync(tmp)) fs.mkdirSync(tmp, { recursive: true });
 
@@ -59,13 +54,14 @@ async function DL_TIKTOK(input) {
 
   const APIKEY = global.Apis?.apiAiya?.apikey || "oboe";
   const URL_TIKTOK = `https://api.alyacore.xyz/dl/tiktokv2?url=${encodeURIComponent(targetUrl)}&key=${APIKEY}`;
-  
+
   const dateCreate = (ts) =>
     new Date(Number(ts) * 1000).toLocaleDateString("es-ES");
 
   const { data } = await apiAxios.get(URL_TIKTOK, {
     headers: {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
       Accept: "application/json, text/plain, */*",
     },
     timeout: 15000,
@@ -100,12 +96,14 @@ async function descargarAArchivo(url, destPath) {
     method: "GET",
     responseType: "stream",
     headers: {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-      "Referer": "https://www.tikwm.com/",
-      "Connection": "keep-alive"
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+      Accept:
+        "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+      Referer: "https://www.tikwm.com/",
+      Connection: "keep-alive",
     },
-    timeout: 30000
+    timeout: 30000,
   });
   await pipelineAsync(response.data, fs.createWriteStream(destPath));
 }
@@ -113,7 +111,7 @@ async function descargarAArchivo(url, destPath) {
 async function processAudioFile(inputP, outP) {
   await execAsync(
     `ffmpeg -y -i "${inputP}" -vn -c:a libmp3lame -b:a 320k -threads 0 "${outP}"`,
-    { maxBuffer: 1024 * 1024 * 50 }
+    { maxBuffer: 1024 * 1024 * 50 },
   );
 }
 
@@ -151,7 +149,7 @@ export default {
 
     try {
       const result = await DL_TIKTOK(text);
-      
+
       // Descargamos el video y la portada de forma segura saltando Cloudflare
       await descargarAArchivo(result.video_dl, inputP);
 
@@ -161,7 +159,7 @@ export default {
           if (fs.existsSync(coverP) && fs.statSync(coverP).size > 0) {
             hasCover = true;
           } else {
-            hasCover = null
+            hasCover = null;
           }
         } catch (e) {
           hasCover = false;
@@ -212,11 +210,14 @@ export default {
         await socket.sendMessage(
           remoteJid,
           { text: caption },
-          { quoted: message }
+          { quoted: message },
         );
       }
 
-      const safeFileName = `${result.authorNick} - ${result.title}`.replace(/[\r\n/\\?%*:|"<>]/g, "").slice(0, 100) + ".mp3";
+      const safeFileName =
+        `${result.authorNick} - ${result.title}`
+          .replace(/[\r\n/\\?%*:|"<>]/g, "")
+          .slice(0, 100) + ".mp3";
 
       await socket.sendMessage(
         remoteJid,
@@ -250,9 +251,15 @@ export default {
         { quoted: message },
       );
     } finally {
-      try { if (fs.existsSync(inputP)) fs.unlinkSync(inputP); } catch {}
-      try { if (fs.existsSync(outP)) fs.unlinkSync(outP); } catch {}
-      try { if (fs.existsSync(coverP)) fs.unlinkSync(coverP); } catch {}
+      try {
+        if (fs.existsSync(inputP)) fs.unlinkSync(inputP);
+      } catch {}
+      try {
+        if (fs.existsSync(outP)) fs.unlinkSync(outP);
+      } catch {}
+      try {
+        if (fs.existsSync(coverP)) fs.unlinkSync(coverP);
+      } catch {}
     }
   },
 };

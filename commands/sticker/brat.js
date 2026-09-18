@@ -10,7 +10,7 @@ const execAsync = promisify(exec);
 
 const customTemp = path.join(
   path.dirname(new URL(import.meta.url).pathname),
-  "../../tmp",
+  "../../cache",
 );
 if (!fs.existsSync(customTemp)) fs.mkdirSync(customTemp, { recursive: true });
 

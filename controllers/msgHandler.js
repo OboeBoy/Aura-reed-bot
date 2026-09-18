@@ -49,6 +49,8 @@ const DEFAULT_PREFIXES = [".", "#", "/", "!", "-", "%", "$"];
 const loadedFiles = new Map(); // ruta relativa -> módulo cargado
 let watchersReady = false;
 const pendingReload = new Map(); // debounce por archivo
+let cachedMiddlewares = null;
+let cachedCommands = null;
 
 function isMiddlewareModule(cmd) {
   return Boolean(cmd && typeof cmd.middleware === "function");
@@ -108,6 +110,8 @@ function scheduleReload(cat, file) {
       if (cmd) {
         const isNew = !loadedFiles.has(relPath);
         loadedFiles.set(relPath, cmd);
+        cachedMiddlewares = null;
+        cachedCommands = null;
         console.log(
           chalk.cyan(
             `[Comandos] ${isNew ? "🆕 Agregado" : "♻️ Recargado"}: ${file} (${cat})`,
@@ -149,18 +153,33 @@ async function ensureCommandsLoaded() {
 
 async function loadMiddlewares() {
   await ensureCommandsLoaded();
-  return [...loadedFiles.values()].filter(isMiddlewareModule);
+  if (cachedMiddlewares) return cachedMiddlewares;
+  cachedMiddlewares = [...loadedFiles.values()].filter(isMiddlewareModule);
+  return cachedMiddlewares;
 }
 
 async function loadCommands() {
   await ensureCommandsLoaded();
+  if (cachedCommands) return cachedCommands;
   const allCommands = [...loadedFiles.values()].filter(isCommandModule);
   allCommands.push(cmdManagerCmd);
-  return allCommands;
+  cachedCommands = allCommands;
+  return cachedCommands;
 }
 
 async function resolveMessageLids(m, sock, remoteJid) {
   if (!m || !m.message) return;
+
+  const hasContextInfo =
+    !!m.message?.extendedTextMessage?.contextInfo ||
+    !!m.message?.imageMessage?.contextInfo ||
+    !!m.message?.videoMessage?.contextInfo ||
+    !!m.message?.audioMessage?.contextInfo ||
+    !!m.message?.stickerMessage?.contextInfo ||
+    !!m.message?.listResponseMessage ||
+    !!m.message?.buttonsResponseMessage;
+
+  if (!hasContextInfo) return;
 
   const findAndResolveContextInfo = async (obj) => {
     if (!obj || typeof obj !== "object") return;
@@ -216,53 +235,6 @@ export async function handleMessage(sock, m, db, saveDB) {
   const isGroup = remoteJid.endsWith("@g.us");
   const senderRaw = m.key.participant || remoteJid;
 
-  // 🛠️ GUARDAR MENSAJE PARA SOPORTE DE "ESPERANDO MENSAJE" (RETRY REQUESTS)
-  try {
-    if (db && typeof db.run === "function") {
-      await db.run(
-        "INSERT OR REPLACE INTO messages (id, jid, message) VALUES (?, ?, ?)",
-        [m.key.id, remoteJid, JSON.stringify(m.message)],
-      );
-    }
-  } catch (e) {}
-
-  // 🔇 DETECTOR Y BORRADO AUTOMÁTICO DE USUARIOS SILENCIADOS (MUTE)
-  if (isGroup && senderRaw) {
-    try {
-      const senderJid = await resolveLidToRealJid(senderRaw, sock, remoteJid);
-      const mutedUsers = db.groups?.[remoteJid]?.mutedUsers || [];
-
-      if (mutedUsers.includes(senderJid)) {
-        await sock.sendMessage(remoteJid, {
-          delete: {
-            remoteJid: remoteJid,
-            fromMe: false,
-            id: m.key.id,
-            participant: senderRaw,
-          },
-        });
-        return;
-      }
-    } catch (e) {
-      console.error(
-        "[handleMessage] Error al verificar/borrar usuario silenciado:",
-        e,
-      );
-    }
-  }
-
-  const rawCtxInfo = m.message?.extendedTextMessage?.contextInfo;
-  const rawParticipant = rawCtxInfo?.participant || null;
-  const rawMentionedJid = Array.isArray(rawCtxInfo?.mentionedJid)
-    ? [...rawCtxInfo.mentionedJid]
-    : [];
-
-  try {
-    await resolveMessageLids(m, sock, remoteJid);
-  } catch (e) {
-    console.error("[handleMessage] Error resolving message LIDs:", e);
-  }
-
   const text =
     m.message.conversation ||
     m.message.extendedTextMessage?.text ||
@@ -286,6 +258,62 @@ export async function handleMessage(sock, m, db, saveDB) {
     : [];
   const commandNameForCheck = esComando ? argsForCheck[0]?.toLowerCase() : null;
 
+  // 🔇 MUTE: solo se comprueba si el grupo tiene usuarios silenciados y el mensaje puede implicar una acción de grupo.
+  if (isGroup && senderRaw) {
+    const mutedUsers = db.groups?.[remoteJid]?.mutedUsers || [];
+    if (Array.isArray(mutedUsers) && mutedUsers.length > 0 && !esComando) {
+      try {
+        const senderJid = senderRaw.endsWith("@lid")
+          ? await resolveLidToRealJid(senderRaw, sock, remoteJid)
+          : senderRaw;
+
+        if (mutedUsers.includes(senderJid)) {
+          await sock.sendMessage(remoteJid, {
+            delete: {
+              remoteJid: remoteJid,
+              fromMe: false,
+              id: m.key.id,
+              participant: senderRaw,
+            },
+          });
+          return;
+        }
+      } catch (e) {
+        console.error(
+          "[handleMessage] Error al verificar/borrar usuario silenciado:",
+          e,
+        );
+      }
+    }
+  }
+
+  const rawCtxInfo = m.message?.extendedTextMessage?.contextInfo;
+  const rawParticipant = rawCtxInfo?.participant || null;
+  const rawMentionedJid = Array.isArray(rawCtxInfo?.mentionedJid)
+    ? [...rawCtxInfo.mentionedJid]
+    : [];
+
+  try {
+    if (
+      !esComando &&
+      m.message &&
+      (m.message.extendedTextMessage ||
+        m.message.listResponseMessage ||
+        m.message.buttonsResponseMessage)
+    ) {
+      await resolveMessageLids(m, sock, remoteJid);
+    }
+  } catch (e) {
+    console.error("[handleMessage] Error resolving message LIDs:", e);
+  }
+
+  if (!esComando) {
+    if (isGroup && !m.key.fromMe) {
+      trackGroupActivity(db, remoteJid, senderRaw);
+    }
+    return;
+  }
+
   const cleanJid = (jid) =>
     jid ? String(jid).split("@")[0].split(":")[0] : null;
   const jidResuelto = await resolveLidToRealJid(senderRaw, sock, remoteJid);
@@ -302,31 +330,61 @@ export async function handleMessage(sock, m, db, saveDB) {
   const botId = sock.user?.id || sock.user?.jid;
   const sender = m.key.fromMe ? botId : jidRemitente;
 
+  const normalizeOwnerValue = (value) => {
+    if (!value && value !== 0) return "";
+    const str = String(value).trim().toLowerCase();
+    if (!str) return "";
+
+    const noPlus = str.replace(/^\+/, "");
+    const noAt = noPlus.split("@")[0].split(":")[0];
+    const digitsOnly = noAt.replace(/\D+/g, "");
+    const variants = new Set([str, noPlus, noAt, digitsOnly]);
+    return [...variants].filter(Boolean);
+  };
+
   const ownerIdentities = new Set();
   for (const owner of owners) {
-    const ownerClean = cleanJid(owner);
-    if (ownerClean) ownerIdentities.add(ownerClean);
+    const variants = normalizeOwnerValue(owner);
+    for (const variant of variants) {
+      ownerIdentities.add(variant);
+    }
 
     if (String(owner).endsWith("@lid")) {
       try {
         const resolvedOwner = await resolveLidToRealJid(owner, sock, remoteJid);
-        const resolvedOwnerClean = cleanJid(resolvedOwner);
-        if (resolvedOwnerClean) ownerIdentities.add(resolvedOwnerClean);
+        const resolvedOwnerVariants = normalizeOwnerValue(resolvedOwner);
+        for (const variant of resolvedOwnerVariants) {
+          ownerIdentities.add(variant);
+        }
       } catch {}
     }
   }
 
-  const senderIdentities = new Set(
-    [sender, senderRaw, jidRemitente].map(cleanJid).filter(Boolean),
-  );
+  const senderIdentities = new Set();
+  for (const value of [sender, senderRaw, jidRemitente]) {
+    for (const variant of normalizeOwnerValue(value)) {
+      senderIdentities.add(variant);
+    }
+  }
   const isOwner =
     Boolean(m.key.fromMe) ||
     [...senderIdentities].some((identity) => ownerIdentities.has(identity));
 
-  const groupSelfMode = isGroup && db.groups?.[remoteJid]?.selfMode;
-  const modSelfMode = db.modSelfMode;
+  const groupSelfValue = isGroup ? db.groups?.[remoteJid]?.selfMode : undefined;
+  const hasExplicitGroupSelf =
+    isGroup &&
+    !!db.groups?.[remoteJid] &&
+    Object.prototype.hasOwnProperty.call(db.groups[remoteJid], "selfMode");
+  const groupSelfMode = isGroup && groupSelfValue === true;
+  const modSelfMode = !!db.modSelfMode;
 
-  if ((groupSelfMode || modSelfMode) && !isOwner) return;
+  const shouldBlockBySelfMode =
+    isGroup &&
+    !isOwner &&
+    (groupSelfMode ||
+      (modSelfMode && (!hasExplicitGroupSelf || groupSelfValue !== false)));
+
+  if (shouldBlockBySelfMode) return;
 
   // 🚫 VERIFICACIÓN DE CHAT BANEADO (BANCHAT)
   const isChatBanned = db.chats?.[remoteJid]?.isBanned;
@@ -398,12 +456,9 @@ export async function handleMessage(sock, m, db, saveDB) {
     }
   }
 
-  if (
-    isGroup &&
-    !m.key.fromMe &&
-    trackGroupActivity(db, remoteJid, jidRemitente)
-  )
-    saveDB(db);
+  if (isGroup && !m.key.fromMe) {
+    trackGroupActivity(db, remoteJid, jidRemitente);
+  }
 
   const rangoLog = isOwner ? "OWNER 👑" : "USUARIO 👤";
 
@@ -411,7 +466,7 @@ export async function handleMessage(sock, m, db, saveDB) {
   let isBotAdmin = false;
   let groupMetadata = null;
 
-  if (isGroup) {
+  if (isGroup && esComando) {
     groupMetadata = await getGroupMetadataSafe(sock, remoteJid);
 
     if (groupMetadata) {
@@ -604,11 +659,38 @@ export async function handleMessage(sock, m, db, saveDB) {
             { quoted: m },
           );
         }
-        if (cmd.adminOnly && !isAdmin) {
+        if (cmd.adminOnly && !isAdmin && !isOwner) {
           await sock.sendPresenceUpdate("paused", remoteJid);
           return await sock.sendMessage(
             remoteJid,
             { text: Rstr.onlyAdmin },
+            { quoted: m },
+          );
+        }
+
+        const normalizedCommand = commandName.toLowerCase();
+        const groupRestrictedCommands = new Set(
+          (isGroup ? db.groups?.[remoteJid]?.restrictedCommands || [] : []).map(
+            (item) => String(item).toLowerCase(),
+          ),
+        );
+        const globalRestrictedCommands = new Set(
+          (db.restrictedCommands || []).map((item) =>
+            String(item).toLowerCase(),
+          ),
+        );
+
+        if (
+          !isOwner &&
+          (groupRestrictedCommands.has(normalizedCommand) ||
+            globalRestrictedCommands.has(normalizedCommand))
+        ) {
+          await sock.sendPresenceUpdate("paused", remoteJid);
+          return await sock.sendMessage(
+            remoteJid,
+            {
+              text: `╭〔 ⚠️ ${fytBold("AURA REED")} 〕⬣\n┃ 🚫 ${fytBold("COMANDO RESTRINGIDO")}\n╰━━━━━━━━━━━━⬣\n\n┃ > El comando *${prefix}${normalizedCommand}* está bloqueado.\n\n╰〔 ⚡ ${fytBold("SYSTEM")} 〕⬣`,
+            },
             { quoted: m },
           );
         }
