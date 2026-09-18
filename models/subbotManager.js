@@ -120,6 +120,47 @@ function scheduleSubBotReconnect(senderId, fn) {
 // SESIONES
 // ============================================================
 
+function hasRealSessionFiles(sessionDir) {
+  if (!fs.existsSync(sessionDir) || !fs.statSync(sessionDir).isDirectory()) {
+    return false;
+  }
+
+  const entries = fs.readdirSync(sessionDir, { withFileTypes: true });
+  if (!entries.length) {
+    return false;
+  }
+
+  const validNames = new Set([
+    "session.db",
+    "creds.json",
+    "creds.json.enc",
+    "creds.json.lock",
+    "pre-key",
+    "sender-key",
+    "session",
+    "app-state-sync-key",
+    "auth",
+  ]);
+
+  for (const entry of entries) {
+    const name = String(entry.name || "");
+    if (!name) continue;
+
+    if (validNames.has(name)) return true;
+    if (
+      name.startsWith("pre-key") ||
+      name.startsWith("sender-key") ||
+      name.startsWith("session-") ||
+      name.startsWith("app-state-sync-key") ||
+      name.startsWith("auth")
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 export function listActiveSubBotSessions() {
   if (!fs.existsSync(sessionsDir)) {
     return [];
@@ -132,9 +173,9 @@ export function listActiveSubBotSessions() {
 
     const sessionId = String(entry.name).trim();
     const sessionDir = path.join(sessionsDir, sessionId);
-    const hasSessionFile = fs.existsSync(path.join(sessionDir, "session.db"));
+    const hasValidSession = hasRealSessionFiles(sessionDir);
 
-    if (!sessionId || !hasSessionFile) continue;
+    if (!sessionId || !hasValidSession) continue;
     ids.add(sessionId);
   }
 
@@ -349,17 +390,14 @@ export function getRegisteredSubBots() {
     if (!cleanId || cleanId.length < 5) continue;
 
     const sessionDir = path.join(sessionsDir, entry.name);
-    const childEntries = fs.readdirSync(sessionDir, { withFileTypes: true });
-    const hasSessionFile = childEntries.some(
-      (item) => item.name === "session.db",
-    );
+    const hasValidSession = hasRealSessionFiles(sessionDir);
 
     resultsMap.set(cleanId, {
       id: cleanId,
-      active: Boolean(activeSubBots.has(cleanId) && hasSessionFile),
-      inactive: !Boolean(activeSubBots.has(cleanId) && hasSessionFile),
-      hasSessionFile,
-      emptyFolder: childEntries.length === 0,
+      active: Boolean(activeSubBots.has(cleanId) && hasValidSession),
+      inactive: !Boolean(activeSubBots.has(cleanId) && hasValidSession),
+      hasSessionFile: hasValidSession,
+      emptyFolder: !hasValidSession,
     });
   }
 
