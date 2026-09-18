@@ -724,7 +724,7 @@ export async function handleMessage(sock, m, db, saveDB) {
           await sock.sendMessage(
             remoteJid,
             {
-              text: `╭〔 ❌ 𝐀𝐔𝐑𝐀 𝐑𝐄𝐄𝐃 〕⬣\n┃ ⚠️ 𝐄𝐑𝐑𝐎𝐑 𝐄𝐍 𝐂𝐎𝐌𝐀𝐍𝐃𝐎\n╰━━━━━━━━━━━━⬣\n\n┃ > Ocurrió un error al ejecutar el comando *${prefix}${commandName}*.\n┃ > Detalle del error:\n> ${err}`,
+              text: `╭〔 ❌ 𝐀𝐔𝐑𝐀 𝐑𝐄𝐄𝐃 〕⬣\n┃ ⚠️ 𝐄𝐑𝐑𝐎𝐑 𝐄𝐍 𝐂𝐎𝐌𝐀𝐍𝐃𝐎\n╰━━━━━━━━━━━━⬣\n\n┃ > Ocurrió un error al ejecutar el comando *${prefix}${commandName}*.\n> *Detalle del error:*\n> ${err}`,
             },
             { quoted: m },
           );

@@ -1,6 +1,5 @@
 node_modules
-tmp
-temp
+cache
 .env
 package-lock.json
 tests

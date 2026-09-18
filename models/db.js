@@ -19,6 +19,94 @@ let saveTimer = null;
 let saving = false;
 let initialized = false;
 
+function closeDbConnection() {
+  try {
+    if (dbConn) {
+      dbConn.close();
+    }
+  } catch {}
+  dbConn = null;
+}
+
+function initializeSqliteConnection() {
+  if (!fs.existsSync(DATABASE_DIR)) {
+    fs.mkdirSync(DATABASE_DIR, { recursive: true });
+  }
+
+  closeDbConnection();
+  dbConn = new Database(DB_SQLITE_FILE);
+  dbConn.pragma("journal_mode = WAL");
+  dbConn.pragma("synchronous = NORMAL");
+  dbConn.pragma("busy_timeout = 5000");
+
+  dbConn.exec(`
+        CREATE TABLE IF NOT EXISTS config (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        );
+        CREATE TABLE IF NOT EXISTS users (
+            jid TEXT PRIMARY KEY,
+            data TEXT
+        );
+        CREATE TABLE IF NOT EXISTS groups (
+            jid TEXT PRIMARY KEY,
+            data TEXT
+        );
+    `);
+}
+
+function recoverSqliteConnection() {
+  try {
+    if (dbConn) {
+      dbConn.close();
+    }
+  } catch {}
+
+  dbConn = null;
+  initialized = false;
+
+  try {
+    initializeSqliteConnection();
+    migrateFromJsonIfNeeded();
+    ensureDefaults();
+
+    const configRows = dbConn.prepare("SELECT key, value FROM config").all();
+    const dbData = {};
+    for (const row of configRows) {
+      try {
+        dbData[row.key] = JSON.parse(row.value);
+      } catch {
+        dbData[row.key] = row.value;
+      }
+    }
+
+    dbCache = {
+      selfMode: dbData.selfMode ?? DEFAULT_DB_CONFIG.selfMode,
+      modSelfMode: dbData.modSelfMode ?? DEFAULT_DB_CONFIG.modSelfMode,
+      restrictedCommands:
+        dbData.restrictedCommands || DEFAULT_DB_CONFIG.restrictedCommands,
+      prefix: dbData.prefix ?? DEFAULT_DB_CONFIG.prefix ?? ".",
+      owners: dbData.owners || DEFAULT_DB_CONFIG.owners,
+      ownerRoles: dbData.ownerRoles || {},
+      maxSubBots: Number.isFinite(Number(dbData.maxSubBots))
+        ? Number(dbData.maxSubBots)
+        : Number(DEFAULT_DB_CONFIG.maxSubBots ?? 30),
+      botName: dbData.botName ?? DEFAULT_DB_CONFIG.botName ?? "Aura Reed",
+      customBanner:
+        dbData.customBanner ?? DEFAULT_DB_CONFIG.customBanner ?? null,
+    };
+
+    initialized = true;
+    return true;
+  } catch (err) {
+    console.error(
+      chalk.red("[DB] No se pudo reabrir SQLite tras error de escritura:"),
+      err.message,
+    );
+    return false;
+  }
+}
+
 // Create node-cache instances with standard TTL of 10 minutes (600 seconds) and useClones: false
 export const groupsCache = new NodeCache({ stdTTL: 600, useClones: false });
 export const usersCache = new NodeCache({ stdTTL: 600, useClones: false });
@@ -27,6 +115,10 @@ const DEFAULT_DB_CONFIG = {
   selfMode: false,
   modSelfMode: false,
   restrictedCommands: [],
+  prefix: ".",
+  maxSubBots: 30,
+  botName: "Aura Reed",
+  customBanner: null,
   owners: [
     "50672373785@s.whatsapp.net",
     "573135180876@s.whatsapp.net",
@@ -348,6 +440,8 @@ function ensureDefaults() {
     ["prefix", DEFAULT_DB_CONFIG.prefix],
     ["owners", DEFAULT_DB_CONFIG.owners],
     ["maxSubBots", DEFAULT_DB_CONFIG.maxSubBots],
+    ["botName", DEFAULT_DB_CONFIG.botName],
+    ["customBanner", DEFAULT_DB_CONFIG.customBanner],
     ["ownerRoles", DEFAULT_DB_CONFIG.ownerRoles],
   ];
 
@@ -357,6 +451,8 @@ function ensureDefaults() {
   );
 
   for (const [key, defaultValue] of defaults) {
+    if (defaultValue === undefined) continue;
+
     const row = stmtSelect.get(key);
     if (!row) {
       stmtInsert.run(key, JSON.stringify(defaultValue));
@@ -369,26 +465,9 @@ export async function initDB() {
     return { ...dbCache, groups: groupsProxy, users: usersProxy };
   }
 
-  if (!fs.existsSync(DATABASE_DIR)) {
-    fs.mkdirSync(DATABASE_DIR, { recursive: true });
+  if (!dbConn || !fs.existsSync(DB_SQLITE_FILE)) {
+    initializeSqliteConnection();
   }
-
-  dbConn = new Database(DB_SQLITE_FILE);
-
-  dbConn.exec(`
-        CREATE TABLE IF NOT EXISTS config (
-            key TEXT PRIMARY KEY,
-            value TEXT
-        );
-        CREATE TABLE IF NOT EXISTS users (
-            jid TEXT PRIMARY KEY,
-            data TEXT
-        );
-        CREATE TABLE IF NOT EXISTS groups (
-            jid TEXT PRIMARY KEY,
-            data TEXT
-        );
-    `);
 
   migrateFromJsonIfNeeded();
   ensureDefaults();
@@ -409,10 +488,14 @@ export async function initDB() {
     modSelfMode: dbData.modSelfMode ?? DEFAULT_DB_CONFIG.modSelfMode,
     restrictedCommands:
       dbData.restrictedCommands || DEFAULT_DB_CONFIG.restrictedCommands,
-    prefix: dbData.prefix ?? DEFAULT_DB_CONFIG.prefix,
+    prefix: dbData.prefix ?? DEFAULT_DB_CONFIG.prefix ?? ".",
     owners: dbData.owners || DEFAULT_DB_CONFIG.owners,
     ownerRoles: dbData.ownerRoles || {},
-    maxSubBots: dbData.maxSubBots ?? DEFAULT_DB_CONFIG.maxSubBots,
+    maxSubBots: Number.isFinite(Number(dbData.maxSubBots))
+      ? Number(dbData.maxSubBots)
+      : Number(DEFAULT_DB_CONFIG.maxSubBots ?? 30),
+    botName: dbData.botName ?? DEFAULT_DB_CONFIG.botName ?? "Aura Reed",
+    customBanner: dbData.customBanner ?? DEFAULT_DB_CONFIG.customBanner ?? null,
   };
 
   initialized = true;
@@ -432,18 +515,55 @@ export async function initDB() {
   return { ...dbCache, groups: groupsProxy, users: usersProxy };
 }
 
+function makeLiveDbObject() {
+  const live = {
+    ...dbCache,
+    groups: groupsProxy,
+    users: usersProxy,
+  };
+
+  return new Proxy(live, {
+    get(target, prop) {
+      if (prop === "groups") return groupsProxy;
+      if (prop === "users") return usersProxy;
+      if (prop in target) return target[prop];
+      if (prop in dbCache) return dbCache[prop];
+      return undefined;
+    },
+    set(target, prop, value) {
+      if (prop === "groups" || prop === "users") {
+        target[prop] = value;
+        return true;
+      }
+
+      dbCache[prop] = value;
+      target[prop] = value;
+      return true;
+    },
+    deleteProperty(target, prop) {
+      if (prop in dbCache) {
+        delete dbCache[prop];
+      }
+      if (prop in target) {
+        delete target[prop];
+      }
+      return true;
+    },
+  });
+}
+
 export async function getDB() {
   if (!initialized) {
     await initDB();
   }
-  return { ...dbCache, groups: groupsProxy, users: usersProxy };
+  return makeLiveDbObject();
 }
 
 export function getDBSync() {
   if (!initialized) {
     throw new Error("DB has not been initialized yet!");
   }
-  return { ...dbCache, groups: groupsProxy, users: usersProxy };
+  return makeLiveDbObject();
 }
 
 function writeDbFiles(data) {
@@ -452,21 +572,25 @@ function writeDbFiles(data) {
     return;
   }
 
-  try {
-    const prefix = data.prefix ?? DEFAULT_DB_CONFIG.prefix;
+  const doWrite = () => {
+    const prefix = data.prefix ?? DEFAULT_DB_CONFIG.prefix ?? ".";
     const selfMode = data.selfMode ?? DEFAULT_DB_CONFIG.selfMode;
     const modSelfMode = data.modSelfMode ?? DEFAULT_DB_CONFIG.modSelfMode;
     const restrictedCommands =
       data.restrictedCommands ?? DEFAULT_DB_CONFIG.restrictedCommands;
     const owners = data.owners ?? DEFAULT_DB_CONFIG.owners;
-    const maxSubBots = data.maxSubBots ?? DEFAULT_DB_CONFIG.maxSubBots;
+    const maxSubBots = Number.isFinite(Number(data.maxSubBots))
+      ? Number(data.maxSubBots)
+      : Number(DEFAULT_DB_CONFIG.maxSubBots ?? 30);
     const ownerRoles = data.ownerRoles ?? {};
+    const botName = data.botName ?? DEFAULT_DB_CONFIG.botName ?? "Aura Reed";
+    const customBanner =
+      data.customBanner ?? DEFAULT_DB_CONFIG.customBanner ?? null;
 
     const cachedGroups = groupsCache.keys();
     const cachedUsers = usersCache.keys();
 
     dbConn.transaction(() => {
-      // Save config
       const configUpdates = [
         ["selfMode", selfMode],
         ["modSelfMode", modSelfMode],
@@ -474,6 +598,8 @@ function writeDbFiles(data) {
         ["prefix", prefix],
         ["owners", owners],
         ["maxSubBots", maxSubBots],
+        ["botName", botName],
+        ["customBanner", customBanner],
         ["ownerRoles", ownerRoles],
       ];
       const stmtConfig = dbConn.prepare(
@@ -483,7 +609,6 @@ function writeDbFiles(data) {
         stmtConfig.run(key, JSON.stringify(value));
       }
 
-      // Save currently cached groups
       const stmtGroup = dbConn.prepare(
         "INSERT INTO groups(jid, data) VALUES(?, ?) ON CONFLICT(jid) DO UPDATE SET data=excluded.data",
       );
@@ -494,7 +619,6 @@ function writeDbFiles(data) {
         }
       }
 
-      // Save currently cached users
       const stmtUser = dbConn.prepare(
         "INSERT INTO users(jid, data) VALUES(?, ?) ON CONFLICT(jid) DO UPDATE SET data=excluded.data",
       );
@@ -511,12 +635,46 @@ function writeDbFiles(data) {
         `[DB] SQLite3 Guardado: DB config, ${cachedGroups.length} grupos en caché, ${cachedUsers.length} usuarios en caché`,
       ),
     );
+  };
+
+  try {
+    doWrite();
   } catch (err) {
-    console.error(
-      chalk.red("[DB] Error CRITICO en writeDbFiles:"),
-      err.message,
+    const dbWasDeletedOrLocked =
+      /readonly|locked|DBMOVED|database is locked|database is read-only/i.test(
+        err.message || "",
+      ) || !fs.existsSync(DB_SQLITE_FILE);
+
+    if (!dbWasDeletedOrLocked) {
+      console.error(
+        chalk.red("[DB] Error CRITICO en writeDbFiles:"),
+        err.message,
+      );
+      throw err;
+    }
+
+    console.warn(
+      chalk.yellow(
+        "[DB] Se detectó una DB SQLite cerrada/readonly/locked. Reconectando...",
+      ),
     );
-    throw err;
+
+    const reconnected = recoverSqliteConnection();
+    if (!reconnected) {
+      console.error(chalk.red("[DB] No se pudo recuperar SQLite."));
+      throw err;
+    }
+
+    try {
+      ensureDefaults();
+      doWrite();
+    } catch (retryErr) {
+      console.error(
+        chalk.red("[DB] Error CRITICO después de reconectar SQLite:"),
+        retryErr.message,
+      );
+      throw retryErr;
+    }
   }
 }
 
@@ -525,7 +683,7 @@ export async function saveDB(data, options = {}) {
     const { groups, users, ...dbData } = data;
 
     if (Object.keys(dbData).length > 0) {
-      dbCache = { ...dbCache, ...dbData };
+      dbCache = { ...(dbCache || {}), ...dbData };
     }
 
     if (groups && typeof groups === "object" && groups !== groupsProxy) {

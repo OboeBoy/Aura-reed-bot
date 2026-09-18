@@ -2,6 +2,10 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { fytBold } from "./../../models/TextStyle.js";
+import {
+  getRegisteredSubBots,
+  listActiveSubBotSessions,
+} from "../../models/subbotManager.js";
 
 const ROOT_DIR = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -113,26 +117,24 @@ export default {
     const targetNum = cleanNum(targetBotRaw);
     const currentBotNum = cleanNum(sock.user?.id || sock.user?.jid);
 
-    // Lectura del JSON global de bots
-    let globalBots = { mainBot: null, subbots: {} };
-    if (fs.existsSync(subbotsJsonPath)) {
-      try {
-        globalBots =
-          JSON.parse(fs.readFileSync(subbotsJsonPath, "utf-8")) || globalBots;
-      } catch {}
+    const registeredSubBots = getRegisteredSubBots();
+    const activeSessionIds = listActiveSubBotSessions();
+    const validSubBotIds = new Set();
+
+    for (const bot of registeredSubBots) {
+      const id = cleanNum(bot?.id || bot?.jid || bot?.key);
+      if (id) validSubBotIds.add(id);
     }
 
-    // "subbots" se guarda como objeto { "numero": { active } }.
-    // Soportamos también el formato viejo (arreglo de números) por compatibilidad.
-    const subbotIds = Array.isArray(globalBots.subbots)
-      ? globalBots.subbots
-      : Object.keys(globalBots.subbots || {});
+    for (const sessionId of activeSessionIds) {
+      const id = cleanNum(sessionId);
+      if (id) validSubBotIds.add(id);
+    }
 
-    // Lista unificada limpia de números telefónicos
     const allValidBots = [
-      cleanNum(globalBots.mainBot),
+      cleanNum(global.mainSocket?.user?.id || global.mainSocket?.user?.jid),
       currentBotNum,
-      ...subbotIds.map(cleanNum),
+      ...[...validSubBotIds],
     ].filter(Boolean);
 
     const isValidBot = allValidBots.includes(targetNum);

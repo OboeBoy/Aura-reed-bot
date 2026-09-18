@@ -178,9 +178,9 @@ export async function getSubBotDB(senderId) {
     ["owners", mainDb.owners || [`${senderId}@s.whatsapp.net`]],
     ["ownerRoles", mainDb.ownerRoles || {}],
     ["modSelfMode", false],
-    ["maxSubBots", 0],
-    ["botName", "Aura Reed"],
-    ["customBanner", null],
+    ["maxSubBots", mainDb.maxSubBots ?? 30],
+    ["botName", mainDb.botName ?? "Aura Reed"],
+    ["customBanner", mainDb.customBanner ?? null],
   ];
 
   const stmtSelect = conn.prepare("SELECT key FROM config WHERE key = ?");
@@ -241,7 +241,7 @@ export async function getSubBotDB(senderId) {
 
     modSelfMode: dbData.modSelfMode ?? false,
 
-    maxSubBots: dbData.maxSubBots ?? 0,
+    maxSubBots: dbData.maxSubBots ?? 30,
 
     botName: dbData.botName ?? "Aura Reed",
 
@@ -298,10 +298,20 @@ export function saveSubBotDB(senderId) {
     const configStmt = instance.conn.prepare(
       "INSERT INTO config(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
     );
-    configStmt.run(
-      "modSelfMode",
-      JSON.stringify(instance.db.modSelfMode ?? false),
-    );
+
+    const configValues = [
+      ["prefix", instance.db.prefix ?? "."],
+      ["owners", instance.db.owners ?? [`${senderId}@s.whatsapp.net`]],
+      ["ownerRoles", instance.db.ownerRoles ?? {}],
+      ["modSelfMode", instance.db.modSelfMode ?? false],
+      ["maxSubBots", instance.db.maxSubBots ?? 30],
+      ["botName", instance.db.botName ?? "Aura Reed"],
+      ["customBanner", instance.db.customBanner ?? null],
+    ];
+
+    for (const [key, value] of configValues) {
+      configStmt.run(key, JSON.stringify(value));
+    }
   } catch (err) {
     console.error(
       chalk.red(`[SubBot DB ${senderId}] Error guardando grupos:`),

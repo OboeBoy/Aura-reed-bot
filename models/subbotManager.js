@@ -47,10 +47,13 @@ export const SUB_LIMIT_MESSAGE =
 export function getMaxSubBots() {
   try {
     const db = getDBSync();
+    const max = Number(db?.maxSubBots ?? 30);
 
-    const max = Number(db.maxSubBots);
+    if (Number.isFinite(max) && max >= 0) {
+      return max;
+    }
 
-    return Number.isFinite(max) && max >= 0 ? max : 30;
+    return 30;
   } catch {
     return 30;
   }
@@ -122,15 +125,25 @@ export function listActiveSubBotSessions() {
     return [];
   }
 
-  return fs
-    .readdirSync(sessionsDir, {
-      withFileTypes: true,
-    })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .filter((name) =>
-      fs.existsSync(path.join(sessionsDir, name, "session.db")),
-    );
+  const ids = new Set();
+
+  for (const entry of fs.readdirSync(sessionsDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+
+    const sessionId = String(entry.name).trim();
+    const sessionDir = path.join(sessionsDir, sessionId);
+    const hasSessionFile = fs.existsSync(path.join(sessionDir, "session.db"));
+
+    if (!sessionId || !hasSessionFile) continue;
+    ids.add(sessionId);
+  }
+
+  for (const activeId of activeSubBots.keys()) {
+    const cleanActiveId = String(activeId).replace(/\D/g, "");
+    if (cleanActiveId) ids.add(cleanActiveId);
+  }
+
+  return [...ids].sort((a, b) => String(a).localeCompare(String(b)));
 }
 
 export function countActiveSubBots() {
@@ -191,7 +204,7 @@ export function getSubBotSlotStatus(senderId) {
   const active = listActiveSubBotSessions();
   const count = active.length;
   const hasOwn = id ? active.includes(id) : false;
-  const available = Math.max(0, max - count);
+  const available = max === 0 ? 0 : Math.max(0, max - count);
 
   return {
     id,
@@ -213,7 +226,7 @@ export function canRegisterSubBot(senderId) {
     return false;
   }
 
-  if (max <= 0) {
+  if (max === 0) {
     return false;
   }
 
@@ -323,38 +336,36 @@ export function isSubBotActive(senderId) {
 }
 
 export function getRegisteredSubBots() {
-  try {
-    if (!fs.existsSync(subbotsJsonPath)) return [];
+  const resultsMap = new Map();
 
-    const data = JSON.parse(fs.readFileSync(subbotsJsonPath, "utf-8"));
-    const subbotsObj = data?.subbots || {};
-    const results = [];
-
-    // Si es un objeto, recorremos sus claves y valores
-    const keys = Array.isArray(subbotsObj)
-      ? subbotsObj
-      : Object.keys(subbotsObj);
-
-    for (const key of keys) {
-      const cleanId = String(key).replace(/\D/g, "");
-
-      // Ignoramos si no es un número de teléfono válido (muy corto)
-      if (!cleanId || cleanId.length < 5) continue;
-
-      // El estado activo real lo manda el Map de sockets activos o el JSON
-      const isActive =
-        activeSubBots.has(cleanId) || Boolean(subbotsObj[key]?.active);
-
-      results.push({
-        id: cleanId,
-        active: isActive,
-      });
-    }
-
-    return results;
-  } catch {
+  if (!fs.existsSync(sessionsDir)) {
     return [];
   }
+
+  for (const entry of fs.readdirSync(sessionsDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+
+    const cleanId = String(entry.name).replace(/\D/g, "");
+    if (!cleanId || cleanId.length < 5) continue;
+
+    const sessionDir = path.join(sessionsDir, entry.name);
+    const childEntries = fs.readdirSync(sessionDir, { withFileTypes: true });
+    const hasSessionFile = childEntries.some(
+      (item) => item.name === "session.db",
+    );
+
+    resultsMap.set(cleanId, {
+      id: cleanId,
+      active: Boolean(activeSubBots.has(cleanId) && hasSessionFile),
+      inactive: !Boolean(activeSubBots.has(cleanId) && hasSessionFile),
+      hasSessionFile,
+      emptyFolder: childEntries.length === 0,
+    });
+  }
+
+  return [...resultsMap.values()].sort((a, b) =>
+    String(a.id).localeCompare(String(b.id)),
+  );
 }
 
 export async function getSubBotsInGroup(groupJid) {
